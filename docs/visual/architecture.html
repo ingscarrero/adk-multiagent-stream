@@ -436,9 +436,10 @@ eventStream memory          true      true        Redis Streams, Kafka, NATS Jet
     </div>
 
     <div class="card bad">
-      <div class="card-head"><span class="card-name">Not emulated &mdash; simply absent</span></div>
-      <p><strong>There is no message store.</strong> The event stream is the only place agent messages exist, which is why a rolled-out transcript is unrecoverable and why a thread can come back saying its messages are gone. In production the stream would be a fast tail in front of a durable store; here it is doing both jobs. That is one architectural decision, not three loose ends.</p>
-      <p>Note what it is <em>not</em>: a missing adapter. Every other row above is a real capability with an emulated stand-in, and swapping it changes nothing around it. This one has no port to swap. Persisting the log does not fix it either &mdash; that makes the same wrong-shaped store durable. A log answers <em>what happened next</em> over a window; a transcript is <em>state read by key, kept indefinitely</em>. See <a href="event-stream.html">The Log Underneath</a>.</p>
+      <div class="card-head"><span class="card-name">Emulated &mdash; but not durable yet</span></div>
+      <p><strong>The message store now exists.</strong> It used to be the one capability that was <em>absent</em> rather than emulated, with the event stream doing the job badly: a rolled-out transcript was unrecoverable and a thread could come back saying its messages were gone.</p>
+      <p>A <code>messageStore</code> port holds settled events keyed by thread, never retained away, and the recovery endpoint reads it. A log answers <em>what happened next</em> over a window; a transcript is <em>state read by key, kept indefinitely</em> &mdash; and they are now two things rather than one thing wearing both hats.</p>
+      <p>What is left is the ordinary kind of gap: its only adapter is in memory. Sessions, threads, the event log and the transcript all still vanish on restart. Every one has a port and none has a durable adapter, which makes the remainder a config change rather than a redesign.</p>
     </div>
   </section>
 

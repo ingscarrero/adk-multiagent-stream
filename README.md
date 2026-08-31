@@ -47,7 +47,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 259 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test` | 271 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
 | `pnpm test:e2e` | 81 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
@@ -238,17 +238,16 @@ Everything is optional. See [`.env.example`](.env.example).
 | `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. `pnpm dev:demo` sets this to `200`; at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
 | `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only. `pnpm dev:demo` sets this to `400` |
 | `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
-| `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` | `memory` / `keyword` / `trusted-header` / `memory` | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
+| `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` \| `_MESSAGESTORE` | all emulated by default | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 
 ## Known limits
 
 Every one of these is recorded with its cause, blast radius, and fix in
 **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)**. The headlines:
 
-- **No message store** — the event log is the only place messages exist, so a
-  transcript expires with the retention window rather than being kept
-  ([L7](docs/LIMITATIONS.md#l7), [L16](docs/LIMITATIONS.md#l16)). This is the
-  one architectural conflation in the repo and the next thing to fix.
+- **Everything is in memory** — sessions, threads, the event log and the
+  transcript. Each has a port and none has a durable adapter yet, so nothing
+  survives a restart ([L7](docs/LIMITATIONS.md#l7)).
 - **Single instance, no auth, no virtualisation**
   ([L8](docs/LIMITATIONS.md#l8)–[L10](docs/LIMITATIONS.md#l10)).
 - **No responsive breakpoints** — desktop widths only

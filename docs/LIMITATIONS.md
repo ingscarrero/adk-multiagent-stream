@@ -14,10 +14,14 @@ comments — asserting that a `resync` mechanism worked end to end when only its
 server half existed. A limitation you have written down is a design decision.
 One your docs quietly claim you solved is a trap.
 
-Six entries have since been **fixed** — L1 and the counter that hid it (L13),
-both correctness items (L2, L3), and both multi-turn scope cuts (L4, L5). All
-six are kept below, struck through, because the reasoning is worth more than a
-tidy list.
+Seven entries have since been **fixed** — L1 and the counter that hid it (L13),
+both correctness items (L2, L3), both multi-turn scope cuts (L4, L5), and the
+empty-threads UX problem (L16). All are kept below, struck through, because the
+reasoning is worth more than a tidy list.
+
+[L7](#l7) is **half fixed and says so**: the message store exists and the
+architecture is right, but its only adapter is in memory, so nothing yet
+survives a restart.
 
 **Correctness is empty, and the scope cuts that were about conversation shape
 are closed.** What remains is production readiness, performance, two smaller
@@ -35,7 +39,7 @@ scope cuts, one observability gap and two UX ones.
 | ~~[L4](#l4)~~ | ~~A thread cannot take a follow-up message~~ | **Fixed** | — |
 | ~~[L5](#l5)~~ | ~~`awaiting_input` is unreachable~~ | **Fixed** | — |
 | [L6](#l6) | No responsive breakpoints or mobile tests | Scope | S |
-| [L7](#l7) | **No message store**; everything is in memory | **Production** | M |
+| [L7](#l7) | ~~No message store~~; everything is still in memory | **Production** | S |
 | [L8](#l8) | Single instance only | Production | L |
 | [L9](#l9) | No authentication on the stream | Production | M |
 | [L10](#l10) | The feed is not virtualised | Production | M |
@@ -44,7 +48,7 @@ scope cuts, one observability gap and two UX ones.
 | ~~[L13](#l13)~~ | ~~`stats.dropped` conflates two opposite meanings~~ | **Fixed** | — |
 | [L14](#l14) | Counters are tracked but never surfaced | Observability | S |
 | [L15](#l15) | ADK is deprecating the agents we compose with | Dependency | M |
-| [L16](#l16) | A resynced feed can be mostly empty threads | UX | S |
+| ~~[L16](#l16)~~ | ~~A resynced feed can be mostly empty threads~~ | **Fixed** | — |
 | [L17](#l17) | Stop cannot be clicked by hand in scripted mode | UX | S |
 
 [L7](#l7) and [L16](#l16) are the same problem seen twice — once from the
@@ -308,9 +312,27 @@ defaults, not by design.
 
 Fine for a boilerplate. Each would be a blocker for a real deployment.
 
-### L7 — There is no message store, and everything is in memory {#l7}
+### L7 — ~~There is no message store~~; everything is still in memory {#l7}
 
-Two problems wear one number, and the second is the interesting one.
+Two problems wore one number. The second is fixed; the first is not.
+
+**The store exists.** `messageStore` is a port with a memory adapter, written
+at settle points only — every event except `message.delta`, which is a
+transport artefact worth nothing once the message it built has closed. That is
+roughly five writes per turn instead of twenty-three.
+
+`GET /api/threads` returns each thread's transcript alongside its identity, so
+recovery hands back the conversation rather than an apology, and the client
+replays those events through the same reducer path live ones take. Retention
+is now the *stream's* property and not the transcript's, which is what
+[L16](#l16) was about — and it is closed.
+
+**What is still true of this entry.** The adapter is `memory`. Sessions,
+threads, the event log and now the transcript all still vanish on restart.
+Every one has a port; none has a real adapter. `PROVIDER_MESSAGESTORE=postgres`
+is catalogued and fails at startup with *"not implemented yet"*, which is the
+next thing to build and the reason this stays open rather than being struck
+through.
 
 **Nothing survives a restart.** Sessions, thread records and the event log all
 live in process. Each now has a port — `PROVIDER_SESSIONS` selects the session
@@ -320,25 +342,10 @@ change rather than a refactor ([PROVIDERS.md](PROVIDERS.md)). None of the real
 adapters is written yet. The thread registry is the one store with no seam at
 all.
 
-**More importantly, the event log is doing a job it is the wrong shape for.**
-There is nowhere else agent messages exist, so the retention window is also the
-lifetime of the conversation. Every symptom of that is user-visible: a snapshot
-that returns identity and no messages, *"Messages for this thread are no longer
-available"*, and a long session degrading into unreadable history
-([L16](#l16)).
-
-A log answers *what happened next* over a window. A transcript is *state read by
-key, kept indefinitely*. Persisting the log — a Redis adapter — does not fix
-this; it makes the same wrong-shaped store durable and multi-instance.
-`docs/ARCHITECTURE.md` has the full argument and the division of labour.
-
-**Fix.** A `messageStore` port written at settle points only — `message.complete`,
-tool calls and results, status transitions — never `message.delta`, which is a
-transport artefact worth nothing once the message closes. That is roughly five
-writes per thread instead of twenty-three. The store becomes truth and the
-stream is demoted to liveness; `resync` keeps its whole shape and starts
-returning messages instead of an apology. This closes [L16](#l16) outright and
-is the next thing to build.
+**Nothing survives a restart.** Sessions, thread records, the event log and the
+transcript all live in process. Each has a port, so each real adapter is a
+config change rather than a refactor; none of those adapters is written. The
+thread registry is the one store with no seam at all.
 
 ### L8 — Single instance only {#l8}
 
@@ -430,51 +437,42 @@ alerting: `droppedLossy > 0` is the one number worth wiring to something.
 
 ## User experience
 
-### L16 — A resynced feed can be mostly empty threads {#l16}
+### L16 — ~~A resynced feed can be mostly empty threads~~ · FIXED {#l16}
 
-**Where** — `ThreadRunner.summaries` returns every thread the session has ever
-had, and the server never forgets one ([L3](#l3)). The replay window that limits what
-can be restored is now the `eventStream` provider ([PROVIDERS.md](PROVIDERS.md)),
-so retention is `EVENT_RETENTION` rather than a constant inside `SessionHub` —
-but a shared store still has to be written before any of it survives a restart.
+**Was** — a reload after a replay-buffer overrun rebuilt every thread the
+session had ever had, and only the tail had content left to restore. Everything
+older came back as an empty card saying its messages were no longer available.
+The window slid as new threads arrived, so a long session tended toward a feed
+that was mostly unreadable history.
 
-After a replay-buffer overrun, a reload rebuilds *all* of them, but only the
-tail of the session has content left to restore. The buffer holds events, not
-threads, and a *turn* costs `5 + 4T + ceil(W / 3)` events — five fixed, four per
-tool round trip, one delta per three words. That is 10 for a no-tool answer, 23
-for the order-tracking prompt, 40 for the research pipeline. The readable window
-is therefore roughly 12 to 50 threads at the default 500, and one or two on the
-small-buffer `dev:recovery` server.
+**Now** — the transcript comes from the message store, which has no retention
+window, so a rebuilt thread arrives whole regardless of how far the stream has
+rolled past it. The `historyTruncated` notice still exists and is still
+correctly worded; it is simply no longer reachable while the store has the
+thread.
 
-Everything older comes back as an empty card. The window slides as new threads
-arrive, so a long-running session tends toward a feed that is mostly unreadable
-history with a few live threads at the end. They render as a quiet italic line
-rather than a card with a warning bar, and the wording says the messages are
-gone rather than implying some are missing, but the noise is real and it grows.
+**The arithmetic that used to matter does not any more.** The old entry worked
+out that a thread costs `5 + 4T + ceil(W / 3)` events and therefore that a
+500-event window held roughly 12 to 50 threads. That number still governs how
+much the *stream* can replay, and it no longer governs how much the user can
+read — which was the whole complaint.
 
-**Why they are restored at all.** Dropping them silently is exactly what
-[L1](#l1) was about, and an active thread *must* be restored or its future
-events never land. The cost falls entirely on finished threads whose transcript
-is unrecoverable.
+**Proved by inverting its own test.** The browser test that asserted the older
+thread *admitted its history was gone* now asserts it comes back complete,
+through the same 40-event window. Honest when written; the clearest evidence
+available that it is fixed.
 
-**Untested against a real model.** The per-thread cost above is measured in
-scripted mode. With `MODEL_MODE=gemini` the delta count is whatever the API
-chunks to, so the readable window could be several times smaller and the
-`EVENT_RETENTION: 500` default may be badly sized. Measuring it needs an API
-key and has not been done &mdash; `lastSeq` in the snapshot is the event count
-per thread, so it is a one-liner once someone has one. See
-[TESTING.md](TESTING.md).
+**What it cost.** Recovery now hydrates from the transcript before the stream
+replays, so the replay is largely re-delivering events the store already
+supplied. Those show up as redundant drops rather than applied events — a
+healthy overlap, and the inverse of the note that used to be in the counters
+test. `droppedLossy` staying at zero is the signal that nothing was
+unrecoverable, and it is the assertion that replaced it.
 
-**Fix.** Three options, roughly in order of effort:
-
-1. **Bound the snapshot** — return every non-terminal thread plus the N most
-   recent terminal ones, so the feed cannot outgrow what is restorable.
-2. **Collapse the ghosts** — keep them all, but behind a "23 earlier threads"
-   disclosure so they cost one line rather than twenty-three cards.
-3. **Persist events** — then nothing is unreadable and the whole limitation
-   disappears, at the cost of a store. That is [L7](#l7).
-
-None is built; the honest wording and the quiet rendering are.
+**Still true, and still [L7](#l7):** with the memory adapter the transcript
+does not survive a restart. A restarted server hands back identity and no
+transcript, and the truncation notice becomes reachable again — the honest
+failure mode of an emulated store, and exactly what the Postgres adapter fixes.
 
 ### L17 — Stop cannot be clicked by hand in scripted mode {#l17}
 

@@ -24,6 +24,7 @@ describe('provider config', () => {
       knowledge: 'keyword',
       identity: 'trusted-header',
       eventStream: 'memory',
+      messageStore: 'memory',
       eventRetention: 500,
     });
   });
@@ -65,6 +66,7 @@ describe('capability catalogue', () => {
       knowledge: 'keyword',
       identity: 'trusted-header',
       eventStream: 'memory',
+      messageStore: 'memory',
     });
     expect(isFullyEmulated(rows)).toBe(true);
     expect(rows.every((r) => r.options.length >= 2)).toBe(true);
@@ -77,6 +79,7 @@ describe('capability catalogue', () => {
       knowledge: 'keyword',
       identity: 'trusted-header',
       eventStream: 'memory',
+      messageStore: 'memory',
     });
     expect(rows.find((r) => r.capability === 'model')?.emulated).toBe(false);
     expect(isFullyEmulated(rows)).toBe(false);
@@ -212,6 +215,7 @@ describe('resolveProviders', () => {
         knowledge: 'keyword',
         identity: 'trusted-header',
         eventStream: 'memory',
+        messageStore: 'memory',
         eventRetention: 500,
         databaseUrl: 'postgres://x',
       }),

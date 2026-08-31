@@ -62,6 +62,20 @@ export const CAPABILITIES = {
     real: ['redis'],
     switchable: true,
   },
+  /**
+   * The durable transcript, and the one capability that was absent rather than
+   * emulated until now.
+   *
+   * Every other row here is a real capability with a stand-in behind it. This
+   * one had no port at all: the event stream was doing the job, badly, because
+   * a log forgets and a transcript must not.
+   */
+  messageStore: {
+    provider: 'Postgres, DynamoDB, any keyed durable store',
+    emulated: 'memory',
+    real: ['postgres'],
+    switchable: true,
+  },
 } as const satisfies Record<string, Capability>;
 
 export type CapabilityName = keyof typeof CAPABILITIES;

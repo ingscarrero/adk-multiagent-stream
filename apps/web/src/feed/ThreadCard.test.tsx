@@ -28,6 +28,7 @@ function thread(overrides: Partial<ThreadState> = {}): ThreadState {
     buffered: [],
     historyTruncated: false,
     awaitingResume: false,
+    restoredFromStore: false,
     ...overrides,
   };
 }

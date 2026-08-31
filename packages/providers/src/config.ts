@@ -13,12 +13,14 @@ export type SessionsMode = 'memory' | 'postgres';
 export type KnowledgeMode = 'keyword' | 'vector';
 export type IdentityMode = 'trusted-header' | 'jwt';
 export type EventStreamMode = 'memory' | 'redis';
+export type MessageStoreMode = 'memory' | 'postgres';
 
 export interface ProviderConfig {
   sessions: SessionsMode;
   knowledge: KnowledgeMode;
   identity: IdentityMode;
   eventStream: EventStreamMode;
+  messageStore: MessageStoreMode;
   /** Events retained per session. The window a reconnecting client can resume within. */
   eventRetention: number;
   /** Required by `sessions=postgres` and `knowledge=vector`. */
@@ -58,6 +60,10 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
     env, 'PROVIDER_IDENTITY',
     [CAPABILITIES.identity.emulated, ...CAPABILITIES.identity.real], 'trusted-header',
   );
+  const messageStore = pick<MessageStoreMode>(
+    env, 'PROVIDER_MESSAGESTORE',
+    [CAPABILITIES.messageStore.emulated, ...CAPABILITIES.messageStore.real], 'memory',
+  );
 
   const eventStream = pick<EventStreamMode>(
     env, 'PROVIDER_EVENTSTREAM',
@@ -90,6 +96,7 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
     // just as much. `SSE_REPLAY_BUFFER` is still honoured because it is the
     // name the docs and the dev:recovery recipe already use.
     eventRetention: Number(env['EVENT_RETENTION'] ?? env['SSE_REPLAY_BUFFER'] ?? 500),
+    messageStore,
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(jwtSecret ? { jwtSecret } : {}),
     ...(redisUrl ? { redisUrl } : {}),

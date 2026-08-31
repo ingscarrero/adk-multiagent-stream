@@ -182,6 +182,22 @@ export type ToolResultEvent = FeedEventOf<'tool.result'>;
 export type ThreadStatusEvent = FeedEventOf<'thread.status'>;
 export type ThreadErrorEvent = FeedEventOf<'thread.error'>;
 
+/**
+ * Whether an event belongs in the durable transcript.
+ *
+ * Everything except `message.delta`. A delta exists to show text before it is
+ * finished; once `message.complete` lands carrying the authoritative full text,
+ * the chunks that built it are worth nothing. Storing settled events only is
+ * about five writes per turn rather than twenty-three, and loses nothing a
+ * reader would ever ask for.
+ *
+ * Lives here rather than in the store so the server, the store and any future
+ * adapter cannot disagree about what durable means.
+ */
+export function isDurableEvent(event: FeedEvent): boolean {
+  return event.type !== 'message.delta';
+}
+
 /** Parses an untrusted payload into a FeedEvent, or throws. */
 export function parseFeedEvent(input: unknown): FeedEvent {
   return feedEventSchema.parse(input);
@@ -240,9 +256,12 @@ export type InputResponseRequest = z.infer<typeof inputResponseRequestSchema>;
  * client where the thread's sequence has reached, so live events continue
  * contiguously instead of looking like an unbridgeable gap.
  *
- * The transcript is deliberately absent. Events live only in the bounded replay
- * buffer, so once they roll out they are genuinely gone -- the snapshot restores
- * a thread's identity and status, not its history.
+ * `transcript` is the thread's settled events, from the durable message store:
+ * everything except `message.delta`, which is a transport artefact worth
+ * nothing once the message it built has closed. It used to be absent, because
+ * events lived only in the bounded replay window and there was nothing to
+ * return -- see L7 for the conflation that caused, and docs/ARCHITECTURE.md for
+ * why a log and a transcript are different jobs.
  */
 export const threadSummarySchema = z.object({
   id: z.string(),
@@ -251,6 +270,14 @@ export const threadSummarySchema = z.object({
   status: threadStatusSchema,
   createdAt: z.number().int().nonnegative(),
   lastSeq: z.number().int().nonnegative(),
+  /**
+   * The thread's settled events, oldest first.
+   *
+   * Empty for a thread the store has nothing for, which after a restart with
+   * the memory adapter is every thread -- the honest failure mode of an
+   * emulated store, and exactly what the Postgres adapter fixes.
+   */
+  transcript: z.array(feedEventSchema).default([]),
 });
 
 export type ThreadSummary = z.infer<typeof threadSummarySchema>;

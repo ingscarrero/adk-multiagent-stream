@@ -431,6 +431,7 @@ describe('resync recovery (L1)', () => {
     status: 'complete',
     createdAt: ts,
     lastSeq: 12,
+    transcript: [],
     ...over,
   });
 
@@ -439,7 +440,7 @@ describe('resync recovery (L1)', () => {
     // watermark made every replayed event fail the already-applied gate, so a
     // thread whose entire history was sitting in the buffer rendered empty and
     // claimed its messages were unavailable.
-    let state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 4 })]));
+    let state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 4, transcript: [] })]));
     state = reduceAll(state, [
       created(T, 1),
       delta(2, 'Hel'),
@@ -467,7 +468,7 @@ describe('resync recovery (L1)', () => {
   });
 
   it('accepts a replay that starts mid-thread, and marks it truncated', () => {
-    let state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 40 })]));
+    let state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 40, transcript: [] })]));
     // The buffer no longer holds this thread's first eighteen events.
     state = reduceAll(state, [delta(19, 'partial'), delta(20, ' text')]);
 
@@ -478,19 +479,19 @@ describe('resync recovery (L1)', () => {
 
   it('leaves a thread with nothing to replay empty and marked unavailable', () => {
     // Its events rolled out entirely and it is finished, so none are coming.
-    const state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 12 })]));
+    const state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 12, transcript: [] })]));
     expect(thread(state).timeline).toEqual([]);
     expect(thread(state).historyTruncated).toBe(true);
   });
 
   it('does not claim truncation for a thread that produced nothing', () => {
-    const state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 0 })]));
+    const state = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 0, transcript: [] })]));
     expect(thread(state).historyTruncated).toBe(false);
   });
 
   it('keeps what we already had when the replay continues contiguously', () => {
     let state = reduceAll(initialFeedState, [created(), delta(2, 'A')]);
-    state = feedReducer(state, resyncAction([summary({ lastSeq: 3 })]));
+    state = feedReducer(state, resyncAction([summary({ lastSeq: 3, transcript: [] })]));
     state = reduceAll(state, [delta(3, 'B')]);
 
     expect(messageText(state)).toBe('AB');
@@ -500,7 +501,7 @@ describe('resync recovery (L1)', () => {
 
   it('jumps a thread forward when the replay skips ahead of what we had', () => {
     let state = reduceAll(initialFeedState, [created(), delta(2, 'A')]);
-    state = feedReducer(state, resyncAction([summary({ lastSeq: 40 })]));
+    state = feedReducer(state, resyncAction([summary({ lastSeq: 40, transcript: [] })]));
     // A different message id: after a gap this is a new message, not more of m1.
     state = reduceAll(state, [delta(41, 'much later', 'm2')]);
 
@@ -515,14 +516,14 @@ describe('resync recovery (L1)', () => {
     let state = reduceAll(initialFeedState, [created(), delta(6, 'held')]);
     expect(thread(state).buffered).toHaveLength(1);
 
-    state = feedReducer(state, resyncAction([summary({ lastSeq: 40 })]));
+    state = feedReducer(state, resyncAction([summary({ lastSeq: 40, transcript: [] })]));
     state = reduceAll(state, [delta(9, 'resumed')]);
     expect(thread(state).buffered).toHaveLength(0);
   });
 
   it('keeps local threads the snapshot does not mention', () => {
     const state = reduceAll(initialFeedState, [created('a'), created('b')]);
-    const resynced = feedReducer(state, resyncAction([summary({ id: 'a', lastSeq: 3 })]));
+    const resynced = feedReducer(state, resyncAction([summary({ id: 'a', lastSeq: 3, transcript: [] })]));
 
     expect(resynced.order).toContain('b');
     expect(resynced.threads['b']).toBeDefined();

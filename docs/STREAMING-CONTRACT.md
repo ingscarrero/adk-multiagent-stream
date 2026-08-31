@@ -306,9 +306,10 @@ feature, and the buffer genuinely rolls.
 
 Here is the part that is *not* production-shaped, and it is one decision:
 
-> **The event log is also the message store.** There is nowhere else agent
-> messages exist. The `eventStream` provider holds the last `EVENT_RETENTION`
-> events per session, and that is the entire history of the conversation.
+> ~~**The event log is also the message store.**~~ **Fixed.** A `messageStore`
+> port now holds the durable transcript, keyed by thread and never retained
+> away, and `GET /api/threads` returns it. What remains is that its only adapter
+> is in memory, so nothing survives a restart ([L7](LIMITATIONS.md#l7)).
 
 In a real system those are two different things, because they answer different
 questions. A log answers *what happened next* over a window; a transcript is
@@ -333,13 +334,19 @@ conflation:
 - A long session degrades into unreadable history ([L16](LIMITATIONS.md#l16)),
   because the readable window is fixed while the thread list grows.
 
-So: the protocol is a faithful implementation of a real pattern, and the
-recovery path is wired end to end. What is missing is the store behind the
-snapshot — [L7](LIMITATIONS.md#l7). Add it and nothing here is torn out: the
-`resync` frame, the snapshot endpoint and the reducer's gates all keep their
-shape, because a transport can still deliver duplicates and gaps after a
-reconnect however durable the history is. The snapshot simply starts returning
-messages instead of metadata, and truncation stops being user-visible.
+So: the protocol is a faithful implementation of a real pattern, and adding the
+store tore none of it out, exactly as predicted. The `resync` frame, the
+snapshot endpoint and the reducer's gates all kept their shape — a transport
+still delivers duplicates and gaps after a reconnect however durable the history
+is. The snapshot returns messages instead of metadata, and truncation stopped
+being user-visible ([L16](LIMITATIONS.md#l16)).
+
+**One thing did change, in the client.** A transcript is not a transport, and
+feeding it through the ordering gates would be a category error: it stores
+settled events only, so the `seq` numbers that belonged to deltas are absent by
+design. Gate 3 would read those holes as loss and buffer the whole transcript
+against predecessors that are never coming. So hydration bypasses the gates,
+and the gates keep policing the only thing they were ever about — the wire.
 
 ## 6. Cancellation
 
@@ -370,10 +377,11 @@ protocol.
   frames, `seq` would need to account for two origins instead of one. If
   human-in-the-loop tool approval were built out, `awaiting_input` is the state
   it would use and a POST is what would resolve it.
-- **No persistence, and no message store at all.** Sessions and the event log
-  are in memory, and there is no separate store of messages behind either —
-  §5b and [L7](LIMITATIONS.md#l7). ADK ships `DatabaseSessionService` for the
-  first half; the second half is a port that does not exist yet.
+- **No persistence.** Sessions, the event log and the transcript are all in
+  memory. The message store now exists as a port (§5b), so the conflation is
+  resolved; what is missing is a durable adapter behind any of the three —
+  [L7](LIMITATIONS.md#l7). ADK ships `DatabaseSessionService` for the sessions
+  half.
 - **No shared event stream.** The stream provider is in-process, so each
   instance holds its own log and its own subscribers. A multi-instance
   deployment needs the Redis adapter (or sticky sessions). The seam exists —

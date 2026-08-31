@@ -142,6 +142,123 @@ const textOf = (events: FeedEvent[], threadId: string) =>
     .map((e) => (e as Extract<FeedEvent, { type: 'message.complete' }>).text)
     .join(' ');
 
+describe('the durable transcript (L7)', () => {
+  it('returns a thread\'s settled events, and never its deltas', async () => {
+    const sessionId = 's-store';
+    const { threadId } = await startThread(sessionId, 'Where is my order, can you track shipping?');
+    await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+
+    const snapshot = threadsSnapshotSchema.parse(
+      await (await fetch(`${baseUrl}/api/threads`, { headers: { 'x-session-id': sessionId } })).json(),
+    );
+    const restored = snapshot.threads.find((t) => t.id === threadId);
+
+    expect(restored?.transcript.length).toBeGreaterThan(0);
+    // The economy of the design: ~5 stored events for a turn that emitted 23.
+    expect(restored?.transcript.map((e) => e.type)).not.toContain('message.delta');
+    expect(restored?.transcript.length).toBeLessThan(restored!.lastSeq);
+    // And the answer is there in full, because message.complete is durable.
+    const text = restored?.transcript
+      .filter((e) => e.type === 'message.complete')
+      .map((e) => e.text)
+      .join(' ');
+    expect(text).toContain('A-1001');
+  });
+
+  it('survives the replay window rolling past the thread entirely', async () => {
+    // This is the case L16 was about. With a retention of 2, everything this
+    // thread emitted is long gone from the stream -- and the transcript is
+    // still complete, because retention is the stream's property and not the
+    // store's.
+    const base = loadConfig({ MODEL_MODE: 'scripted' });
+    const app = createApp({
+      config: { ...base, heartbeatMs: 0, providers: { ...base.providers, eventRetention: 2 } },
+      runnerOptions: { chunkDelayMs: 0 },
+    });
+    const listener = await new Promise<Server>((resolve) => {
+      const started = app.app.listen(0, () => resolve(started));
+    });
+    const tiny = {
+      app,
+      url: `http://127.0.0.1:${(listener.address() as { port: number }).port}`,
+      close: async () => {
+        await app.close();
+        await new Promise<void>((resolve) => listener.close(() => resolve()));
+      },
+    };
+    try {
+      const sessionId = 's-store-rolled';
+      await fetch(`${tiny.url}/api/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+        body: JSON.stringify({ prompt: 'Where is my order, can you track shipping?' }),
+      });
+      await tiny.app.threads.drain();
+
+      const snapshot = threadsSnapshotSchema.parse(
+        await (
+          await fetch(`${tiny.url}/api/threads`, { headers: { 'x-session-id': sessionId } })
+        ).json(),
+      );
+      const restored = snapshot.threads[0];
+
+      expect(restored?.transcript.length).toBeGreaterThan(3);
+      expect(
+        restored?.transcript.filter((e) => e.type === 'message.complete').map((e) => e.text).join(''),
+      ).toContain('A-1001');
+    } finally {
+      await tiny.close();
+    }
+  });
+
+  it('records a follow-up turn into the same transcript', async () => {
+    const sessionId = 's-store-multiturn';
+    const { threadId } = await startThread(sessionId, 'Where is my order, can you track shipping?');
+    const first = await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+    await followUp(sessionId, threadId, 'When will it arrive?');
+    await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}&lastEventId=${first.ids.at(-1)}`,
+      (events) => terminal(events, threadId),
+    );
+
+    const snapshot = threadsSnapshotSchema.parse(
+      await (await fetch(`${baseUrl}/api/threads`, { headers: { 'x-session-id': sessionId } })).json(),
+    );
+    const transcript = snapshot.threads.find((t) => t.id === threadId)?.transcript ?? [];
+
+    // A conversation, not a run: both turns in one transcript, the follow-up
+    // in it, and seq still contiguous across the two.
+    expect(transcript.some((e) => e.type === 'message.user')).toBe(true);
+    expect(transcript.filter((e) => e.type === 'message.complete')).toHaveLength(2);
+    expect(transcript.map((e) => e.seq)).toEqual([...transcript.map((e) => e.seq)].sort((a, b) => a - b));
+  });
+
+  it('stores the event before publishing it, so what a client saw is recoverable', async () => {
+    // Ordering is the durability guarantee. If publish came first, a client
+    // could see an event and a reconnect a millisecond later could find less
+    // history than the connection that dropped.
+    const sessionId = 's-store-order';
+    const { threadId } = await startThread(sessionId, 'hello there');
+    const seen = await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+
+    const snapshot = threadsSnapshotSchema.parse(
+      await (await fetch(`${baseUrl}/api/threads`, { headers: { 'x-session-id': sessionId } })).json(),
+    );
+    const stored = new Set(
+      (snapshot.threads.find((t) => t.id === threadId)?.transcript ?? []).map((e) => e.seq),
+    );
+    const durableSeen = seen.events.filter((e) => e.threadId === threadId && e.type !== 'message.delta');
+
+    for (const event of durableSeen) expect(stored.has(event.seq)).toBe(true);
+  });
+});
+
 describe('follow-up messages (L4)', () => {
   it('continues a finished thread in place, keeping one thread and one seq run', async () => {
     const sessionId = 's-followup';
