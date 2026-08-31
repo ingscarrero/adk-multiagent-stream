@@ -16,13 +16,14 @@ Long-form pages for mechanisms that a diagram explains faster than prose. Open
 them straight from the filesystem — each is one self-contained HTML file with no
 build step, no bundler, and no assets beyond a Google Fonts link.
 
-One overview, then one page per load-bearing file. Each opens with the mechanism, then the details
+Two overviews, then one page per load-bearing file. Each opens with the mechanism, then the details
 that are easy to get wrong, then a short set of trace-it-yourself questions.
-Every page links to the other five, so the set reads in any order.
+Every page links to the other six, so the set reads in any order.
 
 | Page | File it explains |
 |---|---|
 | **[visual/architecture.html](visual/architecture.html)**<br>*The Substrate Line* | the system as a whole — the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for. **Start here.** |
+| **[visual/event-stream.html](visual/event-stream.html)**<br>*The Log Underneath* | `packages/providers/src/eventstream` — the append-only log the feed is built on: which parts of stream systems it uses, the in-process adapter, and what the Redis one will and will not fix |
 | **[visual/reducer-gates.html](visual/reducer-gates.html)**<br>*Four Gates and a Drain* | `apps/web/src/feed/reducer.ts` — the three outcomes, the four gates, the drain loop, eight worked traces including resync recovery |
 | **[visual/adk-adapter.html](visual/adk-adapter.html)**<br>*Many Authors, One Feed* | `apps/server/src/adk-adapter.ts` — the ADK seam, the per-author Map, translation order, who owns status |
 | **[visual/sse-hub.html](visual/sse-hub.html)**<br>*One Wire, Many Threads* | `apps/server/src/sse.ts` — multiplexing, the two counters, the priming frame, and the resync exchange frame by frame |

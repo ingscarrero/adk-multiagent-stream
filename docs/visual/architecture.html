@@ -184,7 +184,7 @@
     <h1>The Substrate Line</h1>
     <p class="standfirst">The whole system in one diagram, the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for.</p>
     <span class="filepath">docs/ARCHITECTURE.md &middot; docs/PROVIDERS.md</span>
-    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+    <p class="siblings">Also in this set: <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
   </header>
 
 
@@ -357,7 +357,7 @@ eventStream memory          true      true        Redis Streams, Kafka, NATS Jet
     <div class="note">
       <span class="note-label">Why storage and delivery are one row</span>
       <p>They were two &mdash; <code>eventLog</code> and <code>fanout</code> &mdash; and that was wrong. Of the four combinations only two are coherent: an in-memory log with shared delivery is broken, because an instance that never held the events cannot replay them to a client that reconnects there; a shared log with in-process delivery works and buys nothing.</p>
-      <p>Every real provider serves both from one primitive &mdash; Redis Streams is <code>XADD</code> / <code>XRANGE</code> / <code>XREAD BLOCK</code> &mdash; so splitting them advertised a seam no implementation has. "Fan-out" was also already taken here: it means a <code>ParallelAgent</code> running its children concurrently.</p>
+      <p>Every real provider serves both from one primitive &mdash; Redis Streams is <code>XADD</code> / <code>XRANGE</code> / <code>XREAD BLOCK</code> &mdash; so splitting them advertised a seam no implementation has. "Fan-out" was also already taken here: it means a <code>ParallelAgent</code> running its children concurrently. <a href="event-stream.html">The Log Underneath</a> covers the stream itself in depth.</p>
     </div>
   </section>
 

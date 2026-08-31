@@ -71,7 +71,7 @@ Index and conventions in **[docs/](docs/README.md)**.
 | **[docs/TESTING.md](docs/TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
 | **[docs/PROVIDERS.md](docs/PROVIDERS.md)** | Emulated versus real: what stands in for Kafka, a vector DB, a session store, an identity provider — and where each seam is. |
-| **[docs/visual/](docs/README.md)** | Six illustrated deep-dives: the architecture and substrate boundary, then the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
+| **[docs/visual/](docs/README.md)** | Seven illustrated deep-dives: the architecture and substrate boundary, the event log the feed is built on, then the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
 
 Every source file opens with a docblock explaining what it owns and why it is
 shaped that way. The interesting reasoning is next to the code, not here.

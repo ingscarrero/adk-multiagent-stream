@@ -184,7 +184,7 @@
     <h1>One Wire, Many Threads</h1>
     <p class="standfirst">A single connection carrying every thread, the two counters that keep them straight, and the one byte that makes the handshake complete.</p>
     <span class="filepath">apps/server/src/sse.ts</span>
-    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
   </header>
 
 
@@ -438,7 +438,7 @@ data: {"type":"message.delta", ...}
     <div class="card ok">
       <div class="card-head"><span class="card-num">04</span><span class="card-name">Storage and delivery moved out</span></div>
       <p>This class used to own the buffer, offset assignment, retention, replay <em>and</em> who gets each frame. Those are now the <code>EventStream</code> provider. What is left here is the part that is genuinely about SSE &mdash; headers, the priming frame, framing, the resync notice, the heartbeat, and subscriber teardown.</p>
-      <p>One port rather than two, because only two of the four log-and-delivery combinations are coherent, and every real provider serves both from one primitive. In-process it is an array and a set of listeners; with <code>PROVIDER_EVENTSTREAM=redis</code> it is Redis Streams, and this file cannot tell the difference.</p>
+      <p>One port rather than two, because only two of the four log-and-delivery combinations are coherent, and every real provider serves both from one primitive. In-process it is an array and a set of listeners; with <code>PROVIDER_EVENTSTREAM=redis</code> it is Redis Streams, and this file cannot tell the difference. The log itself &mdash; what it borrows from stream systems and what the Redis adapter will and will not fix &mdash; is <a href="event-stream.html">The Log Underneath</a>.</p>
       <p><strong>The open/flush shape is a race fix.</strong> A subscriber needs the backlog <em>and</em> everything after it. Calling <code>replay()</code> then <code>subscribe()</code> drops whatever lands between the two, so <code>open</code> does both at once and holds live entries until the caller has written the backlog.</p>
     </div>
 
