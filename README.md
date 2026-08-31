@@ -69,6 +69,7 @@ Index and conventions in **[docs/](docs/README.md)**.
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | How the pieces fit, and four things about ADK worth knowing before reading the code. |
 | **[docs/TESTING.md](docs/TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
+| **[docs/PROVIDERS.md](docs/PROVIDERS.md)** | Emulated versus real: what stands in for Kafka, a vector DB, a session store, an identity provider — and where each seam is. |
 | **[docs/visual/](docs/README.md)** | Five illustrated deep-dives, one per load-bearing file: the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
 
 Every source file opens with a docblock explaining what it owns and why it is

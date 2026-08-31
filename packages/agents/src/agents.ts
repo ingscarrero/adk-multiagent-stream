@@ -34,7 +34,8 @@
  * `Event`s and `Workflow` emits the same ones (with `nodeInfo` added).
  */
 
-import { LlmAgent, ParallelAgent, SequentialAgent, type BaseAgent } from '@google/adk';
+import { LlmAgent, ParallelAgent, SequentialAgent, type BaseAgent, type BaseTool } from '@google/adk';
+import type { KnowledgeProvider } from '@feed/providers';
 import { createModel, type ModelFactoryOptions } from './model.ts';
 import {
   DOCS_RESEARCHER_SCRIPT,
@@ -44,7 +45,12 @@ import {
   ROUTER_SCRIPT,
   SYNTHESIZER_SCRIPT,
 } from './scripts.ts';
-import { checkShippingStatus, lookupOrder, searchKnowledgeBase } from './tools.ts';
+import {
+  checkShippingStatus,
+  createSearchKnowledgeBase,
+  lookupOrder,
+  searchKnowledgeBase,
+} from './tools.ts';
 
 /** The agent entrypoints a thread can be started against. */
 export const AGENT_IDS = ['router', 'research'] as const;
@@ -68,7 +74,7 @@ export function isAgentId(value: unknown): value is AgentId {
   return typeof value === 'string' && (AGENT_IDS as readonly string[]).includes(value);
 }
 
-function buildRouter(options: ModelFactoryOptions): BaseAgent {
+function buildRouter(options: ModelFactoryOptions, search: BaseTool): BaseAgent {
   const orderAgent = new LlmAgent({
     name: 'order_agent',
     description: 'Answers questions about specific orders, shipping, and delivery tracking.',
@@ -84,7 +90,7 @@ function buildRouter(options: ModelFactoryOptions): BaseAgent {
     model: createModel('kb_agent', KB_AGENT_SCRIPT, options),
     instruction:
       'You answer policy questions. Search the knowledge base first and ground your answer in what you find.',
-    tools: [searchKnowledgeBase],
+    tools: [search],
   });
 
   return new LlmAgent({
@@ -97,13 +103,13 @@ function buildRouter(options: ModelFactoryOptions): BaseAgent {
   });
 }
 
-function buildResearch(options: ModelFactoryOptions): BaseAgent {
+function buildResearch(options: ModelFactoryOptions, search: BaseTool): BaseAgent {
   const marketResearcher = new LlmAgent({
     name: 'market_researcher',
     description: 'Gathers customer-facing signals about delivery and fulfilment.',
     model: createModel('market_researcher', MARKET_RESEARCHER_SCRIPT, options),
     instruction: 'Research what customers care about regarding shipping and delivery.',
-    tools: [searchKnowledgeBase],
+    tools: [search],
     // Each parallel branch writes its finding to session state under its own
     // key, which is how the synthesizer reads both without seeing the other
     // branch's raw event stream.
@@ -115,7 +121,7 @@ function buildResearch(options: ModelFactoryOptions): BaseAgent {
     description: 'Gathers policy and documentation signals.',
     model: createModel('docs_researcher', DOCS_RESEARCHER_SCRIPT, options),
     instruction: 'Research the documented policies relevant to the question.',
-    tools: [searchKnowledgeBase],
+    tools: [search],
     outputKey: 'docs_finding',
   });
 
@@ -141,12 +147,26 @@ function buildResearch(options: ModelFactoryOptions): BaseAgent {
   });
 }
 
+export interface AgentOptions extends ModelFactoryOptions {
+  /**
+   * Retrieval backing `searchKnowledgeBase`.
+   *
+   * Defaults to the emulated keyword provider, so callers that do not care
+   * (tests, evals) need not thread one through.
+   */
+  knowledge?: KnowledgeProvider;
+}
+
 /** Builds a fresh agent tree for the given entrypoint. */
-export function createAgent(id: AgentId, options: ModelFactoryOptions = {}): BaseAgent {
+export function createAgent(id: AgentId, options: AgentOptions = {}): BaseAgent {
+  const search = options.knowledge
+    ? createSearchKnowledgeBase(options.knowledge)
+    : searchKnowledgeBase;
+
   switch (id) {
     case 'router':
-      return buildRouter(options);
+      return buildRouter(options, search);
     case 'research':
-      return buildResearch(options);
+      return buildResearch(options, search);
   }
 }

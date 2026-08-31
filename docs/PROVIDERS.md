@@ -23,9 +23,33 @@ change?* Where the answer is "no, just the adapter", the mechanism is sound.
 Where there is no adapter to swap, the emulation is load-bearing and should be
 named as such.
 
+## Status
+
+| | |
+|---|---|
+| **Ports built** | `sessions`, `knowledge`, `identity` |
+| **Catalogued, no port yet** | `eventLog`, `fanout` — still hard-wired in `SessionHub` |
+| **Real adapters built** | `model` → Gemini. The rest fail at startup with *"catalogued but not implemented yet"* |
+
+Everything runs emulated today. The ports exist so the real adapters are a
+config change rather than a refactor; they land next.
+
 ## The matrix
 
-`GET /api/health` reports this live, so it can be checked rather than trusted.
+`GET /api/health` reports this live, so it can be checked rather than trusted:
+
+```
+capability  mode            emulated  switchable  provider
+model       scripted        true      true        Gemini, Vertex AI, any ADK BaseLlm
+sessions    memory          true      true        Postgres via ADK DatabaseSessionService
+knowledge   keyword         true      true        Vector search: pgvector, Vertex AI Search
+identity    trusted-header  true      true        OIDC / JWT
+eventLog    memory          true      false       Redis Streams, Kafka, NATS JetStream
+fanout      inprocess       true      false       Redis pub/sub, NATS, Postgres LISTEN/NOTIFY
+```
+
+`switchable: false` means the capability is named for honesty but is still
+hard-wired — there is no port yet. Better shown as a known gap than omitted.
 
 | Capability | Real-world provider | Emulated with | Flag | Seam |
 |---|---|---|---|---|
@@ -56,6 +80,16 @@ Named so they are not mistaken for something that exists:
 query, splits on non-word characters, and counts tag hits across three
 hardcoded articles. It has the shape of RAG — a query goes in, ranked documents
 come out, the agent grounds its answer in them — and none of the substance.
+
+Its three failure modes are asserted in `packages/providers/src/providers.test.ts`
+rather than described, so the claim can be checked:
+
+| Query | Returns | Why |
+|---|---|---|
+| `return` | the returns article | literal token hit |
+| `returns` | **nothing** | `'return'.includes('returns')` is false — one extra letter loses the document |
+| `how long do I have to send it back` | **all three articles** | `I` survives tokenisation as one character and matches every tag containing an `i`. Noise, not recall |
+| `send this back for money` | **nothing** | a plain paraphrase sharing no literal token. A vector search finds this |
 
 Nothing else in this repo is as easy to mistake for the real thing, which is
 why it is first on the list to get a genuine adapter.

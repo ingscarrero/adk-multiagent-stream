@@ -14,6 +14,7 @@ import cors from 'cors';
 import express, { type Express, type Request, type Response } from 'express';
 import { AGENT_CATALOG, DEFAULT_AGENT_ID, isAgentId } from '@feed/agents';
 import { createThreadRequestSchema } from '@feed/protocol';
+import { describeCapabilities, resolveProviders, type Providers } from '@feed/providers';
 import { loadConfig, type ServerConfig } from './config.ts';
 import { HubRegistry } from './sse.ts';
 import { ThreadRunner, type ThreadRunnerOptions } from './thread-runner.ts';
@@ -21,6 +22,8 @@ import { ThreadRunner, type ThreadRunnerOptions } from './thread-runner.ts';
 export interface AppDeps {
   config?: ServerConfig;
   runnerOptions?: ThreadRunnerOptions;
+  /** Overridable so tests can inject fakes without touching the environment. */
+  providers?: Providers;
 }
 
 export interface FeedApp {
@@ -28,27 +31,61 @@ export interface FeedApp {
   config: ServerConfig;
   hubs: HubRegistry;
   threads: ThreadRunner;
+  providers: Providers;
   /** Releases timers and open connections. Always call this in tests. */
   close: () => Promise<void>;
 }
 
 export function createApp(deps: AppDeps = {}): FeedApp {
   const config = deps.config ?? loadConfig();
+  const providers = deps.providers ?? resolveProviders(config.providers);
   const hubs = new HubRegistry({
     heartbeatMs: config.heartbeatMs,
     replayBufferSize: config.replayBufferSize,
     reconnectDelayMs: config.reconnectDelayMs,
   });
-  const threads = new ThreadRunner(deps.runnerOptions);
+  const threads = new ThreadRunner({
+    ...deps.runnerOptions,
+    sessionService: providers.sessions.service(),
+    knowledge: providers.knowledge,
+  });
 
   const app = express();
   app.use(express.json({ limit: '64kb' }));
   app.use(cors({ origin: config.corsOrigins, credentials: false }));
 
+  /**
+   * Liveness, and the emulated-versus-real matrix.
+   *
+   * The matrix is served rather than only documented so the boundary can be
+   * checked at runtime instead of trusted. docs/PROVIDERS.md explains each row.
+   */
+  /**
+   * The caller's feed, via the identity provider.
+   *
+   * Under the emulated adapter this trusts a header or query parameter; under
+   * `PROVIDER_IDENTITY=jwt` it verifies a token. The routes below do not know
+   * which, which is the point of the port.
+   */
+  const sessionIdOf = async (req: Request): Promise<string | undefined> =>
+    (await providers.identity.resolve(req))?.sessionId;
+
   app.get('/api/health', (_req: Request, res: Response) => {
+    const capabilities = describeCapabilities({
+      model: config.modelMode,
+      sessions: providers.sessions.mode,
+      knowledge: providers.knowledge.mode,
+      identity: providers.identity.mode,
+      // No port yet; catalogued so the list is not misleadingly short.
+      eventLog: 'memory',
+      fanout: 'inprocess',
+    });
+
     res.json({
       status: 'ok',
       modelMode: config.modelMode,
+      capabilities,
+      emulated: capabilities.filter((c) => c.emulated).map((c) => c.capability),
       agents: Object.entries(AGENT_CATALOG).map(([id, meta]) => ({ id, ...meta })),
     });
   });
@@ -60,8 +97,8 @@ export function createApp(deps: AppDeps = {}): FeedApp {
    * The response body carries only the ids the client needs to correlate the
    * thread with the events already arriving on its open stream.
    */
-  app.post('/api/threads', (req: Request, res: Response) => {
-    const sessionId = readSessionId(req);
+  app.post('/api/threads', async (req: Request, res: Response) => {
+    const sessionId = await sessionIdOf(req);
     if (!sessionId) {
       res.status(400).json({ error: 'sessionId is required' });
       return;
@@ -98,8 +135,8 @@ export function createApp(deps: AppDeps = {}): FeedApp {
    * client its resume point is gone, this is what it rebuilds from. Cheap and
    * idempotent, so a client may call it whenever it suspects it has drifted.
    */
-  app.get('/api/threads', (req: Request, res: Response) => {
-    const sessionId = readSessionId(req);
+  app.get('/api/threads', async (req: Request, res: Response) => {
+    const sessionId = await sessionIdOf(req);
     if (!sessionId) {
       res.status(400).json({ error: 'sessionId is required' });
       return;
@@ -124,8 +161,8 @@ export function createApp(deps: AppDeps = {}): FeedApp {
    * One long-lived response per browser session. The client never polls; every
    * update for every thread arrives here.
    */
-  app.get('/api/stream', (req: Request, res: Response) => {
-    const sessionId = readSessionId(req);
+  app.get('/api/stream', async (req: Request, res: Response) => {
+    const sessionId = await sessionIdOf(req);
     if (!sessionId) {
       res.status(400).json({ error: 'sessionId is required' });
       return;
@@ -148,17 +185,13 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     config,
     hubs,
     threads,
+    providers,
     close: async () => {
       hubs.closeAll();
       await threads.drain();
+      await providers.close();
     },
   };
 }
 
-/** Session id from header or query. Header is preferred; query keeps EventSource simple. */
-function readSessionId(req: Request): string | undefined {
-  const fromHeader = req.get('x-session-id');
-  if (fromHeader) return fromHeader;
-  const fromQuery = req.query['sessionId'];
-  return typeof fromQuery === 'string' && fromQuery.length > 0 ? fromQuery : undefined;
-}
+

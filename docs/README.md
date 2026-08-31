@@ -8,6 +8,7 @@
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | How the pieces fit, and the ADK behaviours worth knowing before reading the code. |
 | **[TESTING.md](TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[LIMITATIONS.md](LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
+| **[PROVIDERS.md](PROVIDERS.md)** | What is emulated versus what a real provider would serve, and where each seam is. |
 
 ## Visual deep-dives
 

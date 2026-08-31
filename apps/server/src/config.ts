@@ -7,6 +7,7 @@
  */
 
 import { resolveModelMode, type ModelMode } from '@feed/agents';
+import { loadProviderConfig, type ProviderConfig } from '@feed/providers';
 
 export interface ServerConfig {
   port: number;
@@ -24,6 +25,13 @@ export interface ServerConfig {
   replayBufferSize: number;
   /** Reconnect backoff advertised to the browser, in ms. */
   reconnectDelayMs: number;
+  /**
+   * Which adapter backs each capability the app does not implement itself.
+   *
+   * Emulated by default so a clone runs with no services. See
+   * docs/PROVIDERS.md for what each one stands in for.
+   */
+  providers: ProviderConfig;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -37,5 +45,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     heartbeatMs: Number(env['SSE_HEARTBEAT_MS'] ?? 15_000),
     replayBufferSize: Number(env['SSE_REPLAY_BUFFER'] ?? 500),
     reconnectDelayMs: Number(env['SSE_RETRY_MS'] ?? 1000),
+    providers: loadProviderConfig(env),
   };
 }
