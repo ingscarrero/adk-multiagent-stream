@@ -27,8 +27,8 @@ named as such.
 
 | | |
 |---|---|
-| **Ports built** | `sessions`, `knowledge`, `identity` |
-| **Catalogued, no port yet** | `eventLog`, `fanout` — still hard-wired in `SessionHub` |
+| **Ports built** | `sessions`, `knowledge`, `identity`, `eventStream` |
+| **Catalogued, no port yet** | none |
 | **Real adapters built** | `model` → Gemini. The rest fail at startup with *"catalogued but not implemented yet"* |
 
 Everything runs emulated today. The ports exist so the real adapters are a
@@ -44,12 +44,27 @@ model       scripted        true      true        Gemini, Vertex AI, any ADK Bas
 sessions    memory          true      true        Postgres via ADK DatabaseSessionService
 knowledge   keyword         true      true        Vector search: pgvector, Vertex AI Search
 identity    trusted-header  true      true        OIDC / JWT
-eventLog    memory          true      false       Redis Streams, Kafka, NATS JetStream
-fanout      inprocess       true      false       Redis pub/sub, NATS, Postgres LISTEN/NOTIFY
+eventStream memory          true      true        Redis Streams, Kafka, NATS JetStream
 ```
 
-`switchable: false` means the capability is named for honesty but is still
-hard-wired — there is no port yet. Better shown as a known gap than omitted.
+### Why storage and delivery are one row, not two
+
+They were two — `eventLog` and `fanout` — and that was wrong. Only two of the
+four combinations are coherent:
+
+| log | delivery | |
+|---|---|---|
+| memory | in-process | ✅ single instance |
+| shared | shared | ✅ multi-instance |
+| memory | shared | ❌ an instance that never held the events cannot replay them |
+| shared | in-process | ❌ works, buys nothing |
+
+And every real provider serves both from one primitive: Redis Streams is
+`XADD` / `XRANGE` / `XREAD BLOCK`; Kafka is a topic you produce to and consume
+from. Splitting them advertised a seam no implementation has.
+
+"Fan-out" was also already taken in this repo — it means a `ParallelAgent`
+running its children concurrently.
 
 | Capability | Real-world provider | Emulated with | Flag | Seam |
 |---|---|---|---|---|
@@ -57,8 +72,7 @@ hard-wired — there is no port yet. Better shown as a known gap than omitted.
 | **Agent sessions** | Postgres/MySQL via ADK `DatabaseSessionService`; `VertexAiSessionService` | ADK `InMemorySessionService` | `PROVIDER_SESSIONS` | `packages/providers/src/sessions` |
 | **Knowledge retrieval** | Vector DB — pgvector, Vertex AI Search, Pinecone; ADK ships `VertexAiRagRetrievalTool` | keyword match over 3 fixture articles | `PROVIDER_KNOWLEDGE` | `packages/providers/src/knowledge` |
 | **Embeddings** | Gemini `text-embedding-*` | deterministic hashed vectors | `PROVIDER_EMBEDDINGS` | `packages/providers/src/knowledge` |
-| **Event log / replay window** | Kafka, Redis Streams, NATS JetStream | bounded in-process array | `PROVIDER_EVENTLOG` | `packages/providers/src/eventlog` |
-| **Cross-instance fan-out** | Redis pub/sub, NATS, Postgres `LISTEN/NOTIFY` | a `Set` of open responses | `PROVIDER_FANOUT` | `packages/providers/src/fanout` |
+| **Event stream** — storage, retention, replay and delivery | Redis Streams, Kafka, NATS JetStream | bounded in-process array plus a set of listeners | `PROVIDER_EVENTSTREAM` | `packages/providers/src/eventstream` |
 | **Identity** | OIDC / JWT | client-supplied session id, trusted | `PROVIDER_IDENTITY` | `packages/providers/src/identity` |
 | **Business data (orders)** | An order service over HTTP | 3 fixture records + a fixed `sleep` | — | `packages/agents/src/tools.ts` |
 

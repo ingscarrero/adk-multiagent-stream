@@ -23,6 +23,8 @@ describe('provider config', () => {
       sessions: 'memory',
       knowledge: 'keyword',
       identity: 'trusted-header',
+      eventStream: 'memory',
+      eventRetention: 500,
     });
   });
 
@@ -40,6 +42,7 @@ describe('provider config', () => {
       /DATABASE_URL/,
     );
     expect(() => loadProviderConfig({ PROVIDER_IDENTITY: 'jwt' })).toThrowError(/JWT_SECRET/);
+    expect(() => loadProviderConfig({ PROVIDER_EVENTSTREAM: 'redis' })).toThrowError(/REDIS_URL/);
   });
 
   it('accepts a real mode once its configuration is present', () => {
@@ -61,8 +64,7 @@ describe('capability catalogue', () => {
       sessions: 'memory',
       knowledge: 'keyword',
       identity: 'trusted-header',
-      eventLog: 'memory',
-      fanout: 'inprocess',
+      eventStream: 'memory',
     });
     expect(isFullyEmulated(rows)).toBe(true);
     expect(rows.every((r) => r.options.length >= 2)).toBe(true);
@@ -74,18 +76,19 @@ describe('capability catalogue', () => {
       sessions: 'memory',
       knowledge: 'keyword',
       identity: 'trusted-header',
-      eventLog: 'memory',
-      fanout: 'inprocess',
+      eventStream: 'memory',
     });
     expect(rows.find((r) => r.capability === 'model')?.emulated).toBe(false);
     expect(isFullyEmulated(rows)).toBe(false);
   });
 
-  it('admits which capabilities have no port yet', () => {
-    // Listing them as switchable would be a lie; omitting them would imply the
-    // catalogue is complete.
-    expect(CAPABILITIES.eventLog.switchable).toBe(false);
-    expect(CAPABILITIES.fanout.switchable).toBe(false);
+  it('treats storage and delivery as one capability', () => {
+    // They were two rows once. Only two of the four combinations are coherent
+    // and every real provider serves both from one primitive, so the split
+    // advertised a seam that does not exist.
+    expect(CAPABILITIES.eventStream.switchable).toBe(true);
+    expect(CAPABILITIES.eventStream.real).toContain('redis');
+    expect('fanout' in CAPABILITIES).toBe(false);
   });
 });
 
@@ -198,12 +201,20 @@ describe('resolveProviders', () => {
     expect(providers.sessions.mode).toBe('memory');
     expect(providers.knowledge.mode).toBe('keyword');
     expect(providers.identity.mode).toBe('trusted-header');
+    expect(providers.eventStream.mode).toBe('memory');
     await providers.close();
   });
 
   it('says plainly when a catalogued mode is not implemented yet', () => {
     expect(() =>
-      resolveProviders({ sessions: 'postgres', knowledge: 'keyword', identity: 'trusted-header', databaseUrl: 'postgres://x' }),
+      resolveProviders({
+        sessions: 'postgres',
+        knowledge: 'keyword',
+        identity: 'trusted-header',
+        eventStream: 'memory',
+        eventRetention: 500,
+        databaseUrl: 'postgres://x',
+      }),
     ).toThrowError(/not implemented yet/);
   });
 

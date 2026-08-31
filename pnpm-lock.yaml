@@ -176,6 +176,9 @@ importers:
 
   packages/providers:
     dependencies:
+      '@feed/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@google/adk':
         specifier: 2.0.0
         version: 2.0.0(express@5.2.1)

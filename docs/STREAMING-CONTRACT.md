@@ -322,7 +322,12 @@ protocol.
 - **No persistence.** Sessions and the replay buffer are in memory. ADK ships
   `DatabaseSessionService`; swapping it in is a one-line change in
   `thread-runner.ts`.
-- **No fan-out across server instances.** One process owns a session's hub. A
-  multi-instance deployment needs sticky sessions or a Redis pub/sub hub.
+- **No shared event stream.** The stream provider is in-process, so each
+  instance holds its own log and its own subscribers. A multi-instance
+  deployment needs the Redis adapter (or sticky sessions). The seam exists —
+  `PROVIDER_EVENTSTREAM` — but only the memory adapter is written.
+
+  ("Fan-out" in this repo means a `ParallelAgent` running its children
+  concurrently, not this.)
 - **No bidirectional streaming.** ADK's `StreamingMode.BIDI` throws in v2.0.0.
   SSE is not a preference here; it is the supported mode.

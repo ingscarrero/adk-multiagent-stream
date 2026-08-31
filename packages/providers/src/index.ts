@@ -10,11 +10,14 @@ import { loadProviderConfig, type ProviderConfig } from './config.ts';
 import { memorySessions } from './sessions/memory.ts';
 import { keywordKnowledge } from './knowledge/keyword.ts';
 import { trustedHeaderIdentity } from './identity/trusted-header.ts';
+import { memoryEventStream } from './eventstream/memory.ts';
 import type { Providers } from './ports.ts';
 
 export * from './catalog.ts';
 export * from './config.ts';
 export * from './ports.ts';
+export * from './eventstream/port.ts';
+export { memoryEventStream } from './eventstream/memory.ts';
 export { keywordKnowledge, FIXTURE_ARTICLES } from './knowledge/keyword.ts';
 export { memorySessions } from './sessions/memory.ts';
 export { trustedHeaderIdentity } from './identity/trusted-header.ts';
@@ -29,6 +32,7 @@ export function resolveProviders(config: ProviderConfig = loadProviderConfig()):
   const sessions = memorySessions();
   const knowledge = keywordKnowledge();
   const identity = trustedHeaderIdentity();
+  const eventStream = memoryEventStream({ retention: config.eventRetention });
 
   if (config.sessions !== 'memory') {
     throw new Error(
@@ -45,13 +49,24 @@ export function resolveProviders(config: ProviderConfig = loadProviderConfig()):
       `PROVIDER_IDENTITY=${config.identity} is catalogued but not implemented yet. See docs/PROVIDERS.md.`,
     );
   }
+  if (config.eventStream !== 'memory') {
+    throw new Error(
+      `PROVIDER_EVENTSTREAM=${config.eventStream} is catalogued but not implemented yet. See docs/PROVIDERS.md.`,
+    );
+  }
 
   return {
     sessions,
     knowledge,
     identity,
+    eventStream,
     async close() {
-      await Promise.all([sessions.close(), knowledge.close(), identity.close()]);
+      await Promise.all([
+        sessions.close(),
+        knowledge.close(),
+        identity.close(),
+        eventStream.close(),
+      ]);
     },
   };
 }

@@ -49,17 +49,18 @@ export const CAPABILITIES = {
     real: ['jwt'],
     switchable: true,
   },
-  eventLog: {
+  /**
+   * Storage and delivery are one capability, not two.
+   *
+   * An earlier catalogue split them into `eventLog` and `fanout`. Only two of
+   * the four combinations are coherent, and every real provider serves both
+   * from one primitive, so the split advertised a seam that does not exist.
+   */
+  eventStream: {
     provider: 'Redis Streams, Kafka, NATS JetStream',
     emulated: 'memory',
     real: ['redis'],
-    switchable: false,
-  },
-  fanout: {
-    provider: 'Redis pub/sub, NATS, Postgres LISTEN/NOTIFY',
-    emulated: 'inprocess',
-    real: ['redis'],
-    switchable: false,
+    switchable: true,
   },
 } as const satisfies Record<string, Capability>;
 

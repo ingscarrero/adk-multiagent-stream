@@ -29,21 +29,27 @@ on the critical path of CI.
 |---|---|---|---|
 | Protocol, reducer & components | Vitest (node/jsdom) | 95 | Ordering rules, status machine, wire schemas, the stream hook |
 | Server | Vitest (node) | 38 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation |
-| Providers | Vitest (node) | 25 | Config validation, and a port contract every adapter must satisfy |
+| Providers | Vitest (node) | 36 | Config validation, plus contract suites for the knowledge and event-stream ports |
 | Evals | Vitest (node) | 25 | Retrieval metrics and the agent regression gate |
 | ADK integration | Vitest (node) | 23 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
 | Browser | Playwright | 63 | The whole stack, in two engines plus a small-buffer recovery project |
 
-206 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
+217 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
 CLI and inside the unit suite.
 
 ### Contract tests
 
-`packages/providers` is tested through its *ports*, not its implementations:
-`knowledgeContract(name, make)` is a suite any `KnowledgeProvider` must pass. The
-keyword adapter runs it today; a vector adapter will run the identical suite, so
-a divergence between them surfaces as a failure rather than as a surprise in
-production.
+`packages/providers` is tested through its *ports*, not its implementations.
+`knowledgeContract(name, make)` and `streamContract(name, make)` are suites any
+adapter of those ports must pass. The emulated adapters run them today; the
+Redis and vector adapters will run the identical suites, so a divergence
+surfaces as a failure rather than as a surprise in production.
+
+The event-stream contract is the more interesting of the two, because it pins
+the properties `SessionHub` depends on: offsets are dense and start at 1,
+retention is observable through `oldestOffset` (which is what overrun detection
+reads), and nothing is lost or duplicated across the `open`/`flush` boundary —
+the race that made those two operations a single call.
 
 ### Layer 1 — the reducer is where ordering is really tested
 

@@ -40,7 +40,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 |---|---|
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 206 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test` | 217 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
 | `pnpm test:e2e` | 63 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
