@@ -35,6 +35,7 @@ describe('the agent select has visible effects', () => {
     expect(screen.getAllByTestId('suggestion').map((b) => b.textContent)).toEqual([
       'Where is my order, can you track shipping?',
       'What is your warranty coverage?',
+      'Refund order A-1001, it arrived damaged',
     ]);
 
     await userEvent.selectOptions(screen.getByTestId('agent-select'), 'research');

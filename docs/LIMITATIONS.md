@@ -14,12 +14,14 @@ comments — asserting that a `resync` mechanism worked end to end when only its
 server half existed. A limitation you have written down is a design decision.
 One your docs quietly claim you solved is a trap.
 
-Four entries have since been **fixed** — L1 and the counter that hid it (L13),
-then both correctness items, L2 and L3. All four are kept below, struck
-through, because the reasoning is worth more than a tidy list.
+Six entries have since been **fixed** — L1 and the counter that hid it (L13),
+both correctness items (L2, L3), and both multi-turn scope cuts (L4, L5). All
+six are kept below, struck through, because the reasoning is worth more than a
+tidy list.
 
-**Nothing in the Correctness section is open.** What remains is scope,
-production readiness, performance, one observability gap and two UX ones.
+**Correctness is empty, and the scope cuts that were about conversation shape
+are closed.** What remains is production readiness, performance, two smaller
+scope cuts, one observability gap and two UX ones.
 
 ---
 
@@ -30,8 +32,8 @@ production readiness, performance, one observability gap and two UX ones.
 | ~~[L1](#l1)~~ | ~~`resync` is emitted but never consumed~~ | **Fixed** | — |
 | ~~[L2](#l2)~~ | ~~No per-subscriber backpressure~~ | **Fixed** | — |
 | ~~[L3](#l3)~~ | ~~Session hubs are never evicted~~ | **Fixed** | — |
-| [L4](#l4) | A thread cannot take a follow-up message | Scope | M |
-| [L5](#l5) | `awaiting_input` is unreachable | Scope | M |
+| ~~[L4](#l4)~~ | ~~A thread cannot take a follow-up message~~ | **Fixed** | — |
+| ~~[L5](#l5)~~ | ~~`awaiting_input` is unreachable~~ | **Fixed** | — |
 | [L6](#l6) | No responsive breakpoints or mobile tests | Scope | S |
 | [L7](#l7) | **No message store**; everything is in memory | **Production** | M |
 | [L8](#l8) | Single instance only | Production | L |
@@ -215,32 +217,84 @@ stale. Reverting to the hub-only sweep — the naive fix — turns two of them r
 
 Not defects. Choices, with the reasoning recorded so it can be revisited.
 
-### L4 — A thread cannot take a follow-up message {#l4}
+### L4 — ~~A thread cannot take a follow-up message~~ · FIXED {#l4}
 
-Only `POST /api/threads` exists; one prompt starts one agent run and the thread
-is then closed to input. There is no way to reply within a thread.
+**Was** — only `POST /api/threads` existed. One prompt started one run and the
+thread was then closed to input.
 
-**Why it is a cut and not an oversight.** The exercise this repo models is
-concurrent *threads*, and every ordering property it demonstrates is per-thread
-and holds regardless of turn count.
+**Now** — `POST /api/threads/:id/messages` runs again against the thread's
+existing ADK session. That is the whole feature: ADK accumulates the
+conversation there, so the agent sees earlier turns without anything being
+re-sent. Everything else is bookkeeping around it — a `message.user` event so
+the follow-up lands in the transcript in the right place, timeline placement in
+the reducer, and a per-thread composer that appears only once a turn has
+finished.
 
-**What already exists.** Each thread owns its own ADK session
-([`thread-runner.ts:228`](../apps/server/src/thread-runner.ts)), and ADK
-accumulates conversation history in it, so the agent side is ready.
+**The status machine was the interesting part, as predicted.** `complete` and
+`cancelled` gained exactly one outgoing edge, back to `running`. That forced a
+distinction the code had been eliding: **terminal ends a *turn*, not a
+*thread*.** A thread is a conversation. So `isTerminal` and the new
+`canAcceptFollowUp` now disagree on exactly one status — `error`, which stays
+closed, because a failed run left an unknown amount of work half applied and
+continuing on top of it is worse than starting again.
 
-**Fix.** `POST /api/threads/:id/messages` reusing that session, a
-`message.user` event type in the protocol, timeline placement in the reducer,
-and a per-thread composer. The one genuinely interesting part is the status
-machine, which needs a terminal → `running` re-entry it does not currently allow.
+The 64-pair status test caught the change immediately, which is what it is for.
+Its "no transition out of a terminal status" assertion had to weaken; it is now
+the strongest form still true — *a terminal status reaches nothing except
+`running`, and only when it can accept a follow-up* — plus a separate assertion
+that an errored thread never re-opens.
 
-### L5 — `awaiting_input` is unreachable {#l5}
+**The scripted follow-up is deliberately tool-free.** `completedToolRounds`
+counts tool responses across the whole session, so a follow-up branch sharing a
+tool name with the turn before it would start at turn 1 and skip its own first
+step — the same hazard the transfer comment in `scripted-llm.ts` describes. It
+is also the honest scripting: answering "when will it arrive" from what the
+previous turn established is exactly what history is for, and the browser test
+asserts the answer names an order id the follow-up never mentioned.
 
-The status is defined in the machine and handled in the adapter, but no tool
-declares `requireConfirmation`, so no run ever enters it.
+### L5 — ~~`awaiting_input` is unreachable~~ · FIXED {#l5}
 
-**Fix.** Give one tool `requireConfirmation`, surface the
-`adk_request_confirmation` interrupt, and add an approve/deny control. No
-protocol change needed — the state was modelled ahead of the feature on purpose.
+**Was** — the status was in the machine and handled in the adapter, but no tool
+declared `requireConfirmation`, so no run ever entered it.
+
+**Now** — `requestRefund` gates on approval, ADK pauses instead of running it,
+and the thread sits in `awaiting_input` until someone answers through
+`POST /api/threads/:id/respond`.
+
+**A predicate, not a flag.** `requireConfirmation` takes
+`(args) => amount > 50`, because that is the honest shape of the requirement:
+nobody wants to approve a $4 refund by hand and everybody wants to approve a
+$400 one. A boolean would have demonstrated the mechanism and hidden the reason
+ADK's API takes a function.
+
+**The protocol did need a change after all**, and the note above was wrong to
+say otherwise. `awaiting_input` tells a client to stop showing a spinner; it
+does not say *what* is being asked or what to send back. Hence
+`thread.input_required`, carrying ADK's interrupt id, the tool name, and — the
+part that matters — **the arguments the call would run with**. ADK's own prompt
+names the tool and stops there, and "approve `requestRefund`" is the same
+sentence for $4 and $400. Approving an action whose parameters you cannot see
+is a rubber stamp.
+
+**Three things this surfaced that were not on the list:**
+
+1. `awaiting_tool -> awaiting_input` was not a legal transition. ADK emits the
+   tool call first and the interrupt immediately after, so the thread passes
+   through one on the way to the other. Found by `assertTransition` throwing.
+2. The terminal guarantee needed restating. A paused run is not finished, and
+   closing it out as `complete` would be both a lie and unanswerable — so the
+   guarantee is now *every turn ends in a terminal status, or in
+   `awaiting_input` with a request the client can answer.*
+3. The scripted model could not tell approval from denial. Both reach the same
+   script position, so a denied refund reported itself as approved while every
+   other assertion passed. Fixed with `rejectedText`: the one place a script
+   reads a tool *result* rather than counting rounds. Deliberately the narrowest
+   version of that — was the last result an error, or not — because anything
+   richer is a rules engine pretending to be a language model.
+
+**Denial is a decision, not a dropped call.** ADK returns the call refused
+(`{ error: 'This tool call is rejected.' }`) rather than skipping it, so the
+tool never executes and the turn still terminates.
 
 ### L6 — No responsive breakpoints or mobile tests {#l6}
 
@@ -386,7 +440,7 @@ but a shared store still has to be written before any of it survives a restart.
 
 After a replay-buffer overrun, a reload rebuilds *all* of them, but only the
 tail of the session has content left to restore. The buffer holds events, not
-threads, and a thread costs `5 + 4T + ceil(W / 3)` events — five fixed, four per
+threads, and a *turn* costs `5 + 4T + ceil(W / 3)` events — five fixed, four per
 tool round trip, one delta per three words. That is 10 for a no-tool answer, 23
 for the order-tracking prompt, 40 for the research pipeline. The readable window
 is therefore roughly 12 to 50 threads at the default 500, and one or two on the

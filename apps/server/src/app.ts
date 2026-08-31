@@ -13,7 +13,11 @@
 import cors from 'cors';
 import express, { type Express, type Request, type Response } from 'express';
 import { AGENT_CATALOG, DEFAULT_AGENT_ID, isAgentId } from '@feed/agents';
-import { createThreadRequestSchema } from '@feed/protocol';
+import {
+  createThreadRequestSchema,
+  followUpRequestSchema,
+  inputResponseRequestSchema,
+} from '@feed/protocol';
 import { describeCapabilities, resolveProviders, type Providers } from '@feed/providers';
 import { loadConfig, type ServerConfig } from './config.ts';
 import { HubRegistry } from './sse.ts';
@@ -126,6 +130,97 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     });
 
     res.status(202).json({ threadId: thread.id, sessionId });
+  });
+
+  /**
+   * A follow-up in an existing thread.
+   *
+   * Same shape as `POST /api/threads`: accept or reject, and let the run's
+   * output arrive on the stream. `409` rather than `400` when the thread cannot
+   * take one, because the request is well-formed and the *state* is what
+   * refuses it -- a distinction worth keeping when a client is deciding whether
+   * to retry.
+   */
+  app.post('/api/threads/:threadId/messages', async (req: Request<{ threadId: string }>, res: Response) => {
+    const sessionId = await sessionIdOf(req);
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId is required' });
+      return;
+    }
+
+    const parsed = followUpRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+      return;
+    }
+
+    const existing = threads.get(req.params.threadId);
+    // The session check is authorisation, thin as it is: a thread belongs to the
+    // session that created it, and answering "not found" for someone else's
+    // thread leaks less than "forbidden". See L9 for what real identity needs.
+    if (!existing || existing.sessionId !== sessionId) {
+      res.status(404).json({ error: 'No such thread' });
+      return;
+    }
+
+    const thread = threads.followUp({
+      threadId: existing.id,
+      prompt: parsed.data.prompt,
+      hub: hubs.get(sessionId),
+    });
+    if (!thread) {
+      res.status(409).json({ error: `Thread is ${existing.status} and cannot take a follow-up` });
+      return;
+    }
+
+    res.status(202).json({ threadId: thread.id, sessionId });
+  });
+
+  /**
+   * Answers the human-input request a paused thread is blocked on.
+   *
+   * Four outcomes rather than two, because "no" has three different meanings
+   * here and a client that cannot tell them apart cannot behave sensibly:
+   * the thread is gone, the thread is not waiting, or it is waiting on a
+   * *different* request than the one being answered.
+   */
+  app.post('/api/threads/:threadId/respond', async (req: Request<{ threadId: string }>, res: Response) => {
+    const sessionId = await sessionIdOf(req);
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId is required' });
+      return;
+    }
+
+    const parsed = inputResponseRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+      return;
+    }
+
+    const existing = threads.get(req.params.threadId);
+    if (!existing || existing.sessionId !== sessionId) {
+      res.status(404).json({ error: 'No such thread' });
+      return;
+    }
+
+    const outcome = threads.respond({
+      threadId: existing.id,
+      requestId: parsed.data.requestId,
+      approved: parsed.data.approved,
+      hub: hubs.get(sessionId),
+    });
+
+    if (outcome === 'accepted') {
+      res.status(202).json({ threadId: existing.id, approved: parsed.data.approved });
+      return;
+    }
+    if (outcome === 'wrong-request') {
+      // Deliberately not "close enough": approving a request that is no longer
+      // the pending one is how a stale click authorises something nobody read.
+      res.status(409).json({ error: 'That request is no longer the one awaiting an answer' });
+      return;
+    }
+    res.status(409).json({ error: `Thread is ${existing.status} and is not awaiting input` });
   });
 
   // Typing the params generically keeps `threadId` a string; Express 5 widens

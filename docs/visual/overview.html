@@ -414,8 +414,9 @@
   </section>
 
   <section>
-    <h2>What one thread actually looks like</h2>
+    <h2>What one turn actually looks like</h2>
     <p class="lede">"Where is my order, can you track shipping?" &mdash; 23 events, and every one of them is a rendering decision.</p>
+    <p>One <em>turn</em>, because a thread may have several. A follow-up starts another run in the same thread and pays four of the five fixed events rather than five &mdash; there is no second <code>thread.created</code>, and it opens with a <code>message.user</code> instead.</p>
 
     <figure>
       <div class="figframe">
@@ -463,7 +464,7 @@
           <text x="907" y="147" font-size="10" text-anchor="middle" class="s-accent-text">complete</text>
 
           <text x="0" y="192" font-size="11" class="s-title">events = 5 + 4T + ceil(W / 3)</text>
-          <text x="0" y="212" font-size="10.5" class="s-sub">5 fixed &middot; 4 per tool round trip &middot; one delta per three words. T=3, W=17 gives 23.</text>
+          <text x="0" y="212" font-size="10.5" class="s-sub">5 fixed &middot; 4 per tool round trip &middot; one delta per three words. T=3, W=17 gives 23. Per turn, not per thread.</text>
           <text x="0" y="232" font-size="10.5" class="s-sub">10 for a no-tool answer, 40 for the research pipeline. Under Gemini the delta count is the API's, not ours.</text>
         </svg>
       </div>
@@ -498,21 +499,22 @@
     </div>
 
     <div class="card ok">
-      <div class="card-head"><span class="card-num">NODE + EXPRESS 5</span><span class="card-name">Five routes, one of which never ends</span></div>
-      <p><code>GET /api/stream</code> is the long-lived one. <code>POST /api/threads</code> starts a detached run, <code>GET /api/threads</code> is the recovery snapshot, <code>POST /api/threads/:id/cancel</code> aborts a signal, <code>GET /api/health</code> reports which provider backs each capability.</p>
+      <div class="card-head"><span class="card-num">NODE + EXPRESS 5</span><span class="card-name">Seven routes, one of which never ends</span></div>
+      <p><code>GET /api/stream</code> is the long-lived one. <code>POST /api/threads</code> starts a detached run, <code>POST /api/threads/:id/messages</code> continues one, <code>POST /api/threads/:id/respond</code> answers a paused one, <code>POST /api/threads/:id/cancel</code> aborts a signal, <code>GET /api/threads</code> is the recovery snapshot, and <code>GET /api/health</code> reports which provider backs each capability.</p>
+      <p>Three of those are the same operation wearing different clothes: <strong>run again against the thread's existing ADK session with a different message.</strong> A prompt opens it, text continues it, and a <code>functionResponse</code> quoting ADK's interrupt id resumes a run paused on a human decision. History accumulates in that session, which is why a follow-up can be answered from an earlier turn without re-sending anything.</p>
       <p>The detail that cost real debugging: an SSE endpoint <strong>must write a body byte immediately</strong>. <code>flushHeaders()</code> flushes your response, but an intermediary has its own, and Node will not put those headers on the wire until a body chunk exists &mdash; so <code>EventSource</code> sits in <code>CONNECTING</code> until the first heartbeat fifteen seconds later. See <a href="sse-hub.html">One Wire, Many Threads</a>.</p>
     </div>
 
     <div class="card ok">
-      <div class="card-head"><span class="card-num">PLAYWRIGHT</span><span class="card-name">63 runs, zero fixed sleeps, and a project for the untestable case</span></div>
+      <div class="card-head"><span class="card-num">PLAYWRIGHT</span><span class="card-name">81 runs, zero fixed sleeps, and a project for the untestable case</span></div>
       <p>Three projects over four servers. Chromium and Firefox run against the default pair; <code>recovery</code> runs against a second server with a 40-event retention, because a replay-buffer overrun on the 500-event default needs about twenty-five prompts and is therefore never tested by accident.</p>
       <p>That fourth layer exists because three unit layers were green while the recovery feature was broken, three separate times. See <a href="e2e.html">No Sleeps, No Selectors</a>.</p>
     </div>
 
     <div class="card ok">
-      <div class="card-head"><span class="card-num">CONVERSATIONAL UX</span><span class="card-name">Seven moments where a plausible build misleads the user</span></div>
+      <div class="card-head"><span class="card-num">CONVERSATIONAL UX</span><span class="card-name">Nine moments where a plausible build misleads the user</span></div>
       <p>This is the area with no single file behind it, and the one that is easiest to get wrong while every test still passes. An agent run has a handful of moments where the <em>honest</em> thing to render and the <em>obvious</em> thing to render are different &mdash; and the obvious one looks fine to whoever built it.</p>
-      <p>The section below works through all seven: what the moment is, what a reasonable-looking build does, and what this one does instead. Each is pinned by a named browser test, so they are claims that can be checked rather than taste.</p>
+      <p>The section below works through all nine: what the moment is, what a reasonable-looking build does, and what this one does instead. Each is pinned by a named browser test, so they are claims that can be checked rather than taste.</p>
     </div>
 
     <div class="card ok">
@@ -569,7 +571,7 @@
       <figcaption>Neither lane is faster &mdash; the work takes exactly as long either way. What changes is whether the user can tell the difference between <em>thinking</em> and <em>broken</em>.</figcaption>
     </figure>
 
-    <h3>The seven, in full</h3>
+    <h3>The nine, in full</h3>
     <p>Read the middle column first. That is the version most people build, and none of it is careless &mdash; each one is the reasonable reading of the requirement.</p>
 
     <div class="tablewrap">
@@ -607,6 +609,18 @@
             <td class="mono">never disables the composer while a thread is running &middot; accepts a second prompt while the first is still streaming</td>
           </tr>
           <tr>
+            <td><strong>When the agent wants to do something costly</strong></td>
+            <td>Run the tool. It is what the model asked for</td>
+            <td>Pause on <code>awaiting_input</code> and show <em>the arguments</em>. ADK's own prompt names the tool and stops there &mdash; "approve <code>requestRefund</code>" is the same sentence for $4 and $400, and approving an action whose parameters you cannot see is a rubber stamp</td>
+            <td class="mono">pauses and asks, showing what would run &middot; applies the refund when approved</td>
+          </tr>
+          <tr>
+            <td><strong>After a turn finishes</strong></td>
+            <td>The thread is done; start a new one to ask more</td>
+            <td>Offer a composer inside the thread. A second card would imply two unrelated questions, and would throw away the history that makes the follow-up answerable at all</td>
+            <td class="mono">continues the same thread instead of starting another</td>
+          </tr>
+          <tr>
             <td><strong>When the user hits Stop</strong></td>
             <td>Abort the run and clear the thread</td>
             <td>Cancel one thread only, mark it <code>cancelled</code>, and close any open message so no caret is left blinking on something already finished. The other threads never notice</td>
@@ -629,8 +643,10 @@
       <p>Every decision above resolves one of those ambiguities in the user's favour, and each costs something &mdash; an extra event, a wider protocol, a second wording to maintain. That is the trade the column headings are there to make visible.</p>
     </div>
 
-    <h3>Two that are only half-won</h3>
+    <h3>Three that are only half-won</h3>
     <p><strong>Lost history can be named but not recovered.</strong> A restored thread says its messages are gone, and after a long session the feed becomes mostly those notices, because the thread list grows while the readable window does not (<a href="../LIMITATIONS.md">L16</a>). The honest wording and the quiet rendering are built; the store that would make the notice unnecessary is not, which is <a href="../LIMITATIONS.md">L7</a> and the subject of <a href="architecture.html">The Substrate Line</a>.</p>
+
+    <p><strong>A denied action needs an answer written for it.</strong> The scripted model reaches the same script position whether an approval was granted or refused, so the first version of the confirmation gate reported a denied refund as <em>applied</em> &mdash; while every other assertion passed. Fixed with <code>rejectedText</code>, the one place a script reads a tool <em>result</em> rather than counting rounds. A real model reads the refusal payload; a fake has to be told about it.</p>
 
     <p><strong>Stop is built, tested, and effectively invisible.</strong> The control renders only while a thread is non-terminal, which is right &mdash; offering to cancel something already finished is worse than not offering it. But at the default scripted pacing that window is <strong>465 ms</strong> for the router and <strong>657 ms</strong> for the research pipeline, measured off the wire. Nobody can notice a button appear, decide to use it and reach it in that time, so the feature reads as missing to anyone evaluating the app by hand.</p>
     <p>With <code>MODEL_MODE=gemini</code> a thread runs for seconds and Stop is comfortably reachable, so this is an artefact of the scripted model being fast on purpose &mdash; the same property that makes the suite deterministic. It is still a real problem, because the first thing anyone does is <code>pnpm dev</code> and send a prompt, and <strong>a capability nobody can observe is indistinguishable from one that does not exist</strong>. Raising the pacing makes it plainly visible:</p>
@@ -668,11 +684,11 @@
         <thead><tr><th>&nbsp;</th><th class="mono">Count</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td>Packages</td><td class="mono">7</td><td>Consumed as TypeScript source &mdash; no build step between them</td></tr>
-          <tr><td>Unit + integration tests</td><td class="mono">231</td><td>Protocol, reducer, components, adapter, HTTP/SSE, providers, evals</td></tr>
-          <tr><td>Browser tests</td><td class="mono">63</td><td>Chromium 34, Firefox 25, recovery 4</td></tr>
-          <tr><td>Eval cases</td><td class="mono">6</td><td>Run as a CLI and inside <code>pnpm test</code>, so they gate</td></tr>
+          <tr><td>Unit + integration tests</td><td class="mono">259</td><td>Protocol, reducer, components, adapter, HTTP/SSE, providers, evals</td></tr>
+          <tr><td>Browser tests</td><td class="mono">81</td><td>Chromium 43, Firefox 34, recovery 4</td></tr>
+          <tr><td>Eval cases</td><td class="mono">7</td><td>Run as a CLI and inside <code>pnpm test</code>, so they gate</td></tr>
           <tr><td>Status transitions asserted</td><td class="mono">64</td><td>Every <code>(from, to)</code> pair, against an independently written table</td></tr>
-          <tr><td>Recorded limitations</td><td class="mono">17</td><td>Four fixed and kept struck through, because the reasoning outlives the list. No correctness item is open</td></tr>
+          <tr><td>Recorded limitations</td><td class="mono">17</td><td>Six fixed and kept struck through, because the reasoning outlives the list. No correctness item is open</td></tr>
           <tr><td>External services required</td><td class="mono">0</td><td><code>pnpm install &amp;&amp; pnpm dev</code>. No key, no container</td></tr>
         </tbody>
       </table>

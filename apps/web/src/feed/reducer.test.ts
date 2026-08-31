@@ -57,6 +57,132 @@ const thread = (state: FeedState, id = T) => state.threads[id]!;
 const messageText = (state: FeedState, messageId = 'm1', id = T) =>
   thread(state, id).messages[messageId]?.text;
 
+const userMessage = (seq: number, text: string): FeedEvent => ({
+  type: 'message.user',
+  ...at(seq),
+  text,
+});
+
+const inputRequired = (seq: number, requestId: string): FeedEvent => ({
+  type: 'thread.input_required',
+  ...at(seq),
+  requestId,
+  kind: 'confirmation',
+  toolName: 'requestRefund',
+  toolArgs: { orderId: 'A-1001', amount: 129.99 },
+});
+
+describe('follow-up messages (L4)', () => {
+  it('places the follow-up in the timeline between the turns it separates', () => {
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      complete(3, 'first answer'),
+      status(4, 'complete'),
+      userMessage(5, 'and when will it arrive?'),
+      status(6, 'running'),
+      complete(7, 'second answer', 'm2'),
+      status(8, 'complete'),
+    ]);
+
+    // Order is the assertion: a follow-up rendered above the answer it prompted
+    // makes the transcript read backwards.
+    expect(thread(state).timeline).toEqual([
+      { kind: 'message', id: 'm1' },
+      { kind: 'user', text: 'and when will it arrive?', at: ts + 5 },
+      { kind: 'message', id: 'm2' },
+    ]);
+  });
+
+  it('keeps one thread across turns rather than starting another', () => {
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      status(3, 'complete'),
+      userMessage(4, 'again please'),
+      status(5, 'running'),
+      status(6, 'complete'),
+    ]);
+
+    expect(Object.keys(state.threads)).toEqual([T]);
+    expect(thread(state).status).toBe('complete');
+  });
+
+  it('re-opens a completed thread into running', () => {
+    // The transition the status machine had to grow. Without it the client
+    // drops the status and the thread renders as finished while it streams.
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      status(3, 'complete'),
+      status(4, 'running'),
+    ]);
+    expect(thread(state).status).toBe('running');
+  });
+
+  it('does not re-open an errored thread', () => {
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      status(3, 'error'),
+      status(4, 'running'),
+    ]);
+    expect(thread(state).status).toBe('error');
+  });
+});
+
+describe('human-in-the-loop requests (L5)', () => {
+  it('records what is being asked, so the UI can render a decision', () => {
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      inputRequired(3, 'req-1'),
+      status(4, 'awaiting_input'),
+    ]);
+
+    expect(thread(state).inputRequest).toEqual({
+      requestId: 'req-1',
+      kind: 'confirmation',
+      toolName: 'requestRefund',
+      toolArgs: { orderId: 'A-1001', amount: 129.99 },
+    });
+    expect(thread(state).status).toBe('awaiting_input');
+  });
+
+  it('clears the request when the thread leaves awaiting_input', () => {
+    // Keyed off the status rather than off the response landing, because the
+    // status is what gets replayed on reconnect. A control that outlived its
+    // request would let a user approve the same action twice.
+    const state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      inputRequired(3, 'req-1'),
+      status(4, 'awaiting_input'),
+      status(5, 'running'),
+    ]);
+
+    expect(thread(state).inputRequest).toBeUndefined();
+    expect(thread(state).status).toBe('running');
+  });
+
+  it('survives a replay of the whole pause, ending in the same state', () => {
+    // Replay is not a special case here: the events are idempotent, so a
+    // reconnect that re-delivers the pause must not resurrect an answered
+    // request or duplicate the timeline.
+    const events = [
+      created(),
+      status(2, 'running'),
+      inputRequired(3, 'req-1'),
+      status(4, 'awaiting_input'),
+    ];
+    const once = reduceAll(initialFeedState, events);
+    const twice = reduceAll(once, events);
+
+    expect(twice.threads[T]?.inputRequest).toEqual(once.threads[T]?.inputRequest);
+    expect(twice.threads[T]?.timeline).toEqual(once.threads[T]?.timeline);
+  });
+});
+
 describe('thread creation', () => {
   it('creates a thread from thread.created and appends it to the feed', () => {
     const state = reduceAll(initialFeedState, [created('a'), created('b')]);

@@ -28,8 +28,20 @@ import type { Content } from '@google/genai';
 
 /** One model turn in a script. */
 export type ScriptedTurn =
-  /** Stream a block of text, then finish the turn. */
-  | { kind: 'text'; text: string }
+  /**
+   * Stream a block of text, then finish the turn.
+   *
+   * `rejectedText` is the answer to give when the tool call this turn follows
+   * came back refused rather than executed -- which happens when a
+   * `requireConfirmation` gate is denied. Without it a script says the same
+   * thing either way, and a denied refund reports itself as approved.
+   *
+   * This is the one place the fake model reads a tool *result* rather than just
+   * counting rounds. It is deliberately the narrowest version of that: was the
+   * last result an error, or not. Anything richer would be a rules engine
+   * pretending to be a language model.
+   */
+  | { kind: 'text'; text: string; rejectedText?: string }
   /** Request one or more tool calls. ADK runs them and calls the model again. */
   | { kind: 'toolCall'; calls: Array<{ name: string; args: Record<string, unknown> }> }
   /** Hand off to a sub-agent via ADK's built-in `transfer_to_agent`. */
@@ -130,6 +142,30 @@ function completedToolRounds(contents: readonly Content[], ownToolNames: Set<str
   ).length;
 }
 
+/**
+ * Whether the most recent response for one of this branch's tools was an error.
+ *
+ * ADK reports a denied confirmation as a function response whose payload
+ * carries an `error`, rather than by skipping the response -- so the refusal is
+ * observable in exactly the place the next model turn would look.
+ */
+function lastToolResultWasRejected(
+  contents: readonly Content[],
+  ownToolNames: ReadonlySet<string>,
+): boolean {
+  for (let i = contents.length - 1; i >= 0; i -= 1) {
+    for (const part of contents[i]?.parts ?? []) {
+      const response = part.functionResponse;
+      if (!response || !ownToolNames.has(response.name ?? '')) continue;
+      const payload = response.response;
+      return (
+        typeof payload === 'object' && payload !== null && 'error' in payload
+      );
+    }
+  }
+  return false;
+}
+
 /** Splits text into chunk-sized groups of words, keeping the whitespace intact. */
 function chunkText(text: string, wordsPerChunk: number): string[] {
   const tokens = text.match(/\S+\s*/g) ?? [];
@@ -174,7 +210,8 @@ export class ScriptedLlm extends BaseLlm {
   ): AsyncGenerator<LlmResponse, void> {
     const prompt = latestUserText(llmRequest.contents);
     const branch = this.selectBranch(prompt);
-    const turnIndex = branch ? completedToolRounds(llmRequest.contents, toolNamesIn(branch)) : 0;
+    const ownTools = branch ? toolNamesIn(branch) : new Set<string>();
+    const turnIndex = branch ? completedToolRounds(llmRequest.contents, ownTools) : 0;
     const turn = branch?.turns[turnIndex];
 
     if (!turn) {
@@ -244,9 +281,16 @@ export class ScriptedLlm extends BaseLlm {
         return;
 
       case 'text': {
+        // The only place the script reads a tool result rather than counting
+        // rounds: a refused call gets the refusal answer, when one is written.
+        const text =
+          turn.rejectedText && lastToolResultWasRejected(llmRequest.contents, ownTools)
+            ? turn.rejectedText
+            : turn.text;
+
         if (!stream) {
           yield {
-            content: { role: 'model', parts: [{ text: turn.text }] },
+            content: { role: 'model', parts: [{ text }] },
             turnComplete: true,
           };
           return;
@@ -257,7 +301,7 @@ export class ScriptedLlm extends BaseLlm {
         // text. ADK forwards partials to the caller and persists only the final
         // one, which is exactly the behaviour the feed adapter is written against.
         let accumulated = '';
-        for (const chunk of chunkText(turn.text, this.wordsPerChunk)) {
+        for (const chunk of chunkText(text, this.wordsPerChunk)) {
           if (abortSignal?.aborted) return;
           await sleep(this.chunkDelayMs);
           if (abortSignal?.aborted) return;

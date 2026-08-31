@@ -28,8 +28,12 @@ Send a prompt, then send another before the first finishes. Both stream.
   `transfer_to_agent`, and a **research pipeline** that fans out to two agents
   in parallel and then synthesises their findings.
 - **Live thread status** — `queued → running → streaming → awaiting_tool →
-  complete | error | cancelled`, with a guarantee that no thread is ever left
-  in a non-terminal state.
+  complete | error | cancelled`, with a guarantee that every turn ends in a
+  terminal status or in a pause the client can answer.
+- **Follow-up turns** — reply inside a thread and the agent answers from the
+  conversation so far, because the ADK session is reused.
+- **Human-in-the-loop approval** — a refund over $50 pauses on `awaiting_input`
+  and shows the arguments before it runs. Approve or deny.
 - **Tool calls rendered inline**, arguments and results expandable.
 - **Stop** any thread mid-stream; the others are unaffected. (Use `pnpm dev:demo`
   to see this — at the default pacing a scripted thread finishes in ~0.5s and the
@@ -43,8 +47,8 @@ Send a prompt, then send another before the first finishes. Both stream.
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 231 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
-| `pnpm test:e2e` | 63 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
+| `pnpm test` | 259 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test:e2e` | 81 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
 | `pnpm lint` | ESLint, type-aware |
@@ -145,7 +149,7 @@ is a small TypeScript implementation of the same ideas, using ADK's metric names
 so the numbers mean the same thing:
 
 ```
-support — 6 cases
+support — 7 cases
 thresholds: trajectory >= 1, response >= 0.5
 
   ✓ order-tracking               traj 1.00  resp 0.94  315ms
@@ -154,8 +158,9 @@ thresholds: trajectory >= 1, response >= 0.5
   ✓ returns-policy               traj 1.00  resp 1.00  156ms
   ✓ no-tools-needed              traj 1.00  resp 1.00    1ms
   ✓ research-pipeline            traj 1.00  resp 0.52  160ms
+  ✓ refund-requires-approval     traj 1.00  resp 1.00    3ms
 
-6/6 passed  (avg trajectory 1.00, avg response 0.89)
+7/7 passed  (avg trajectory 1.00, avg response 0.90)
 ```
 
 `tool_trajectory_avg_score` matters more than it first looks: two agents can
@@ -246,8 +251,8 @@ Every one of these is recorded with its cause, blast radius, and fix in
   one architectural conflation in the repo and the next thing to fix.
 - **Single instance, no auth, no virtualisation**
   ([L8](docs/LIMITATIONS.md#l8)–[L10](docs/LIMITATIONS.md#l10)).
-- **A thread takes one prompt** — no follow-up messages yet
-  ([L4](docs/LIMITATIONS.md#l4)).
+- **No responsive breakpoints** — desktop widths only
+  ([L6](docs/LIMITATIONS.md#l6)).
 
 ## Requirements
 

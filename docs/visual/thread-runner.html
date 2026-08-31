@@ -258,16 +258,17 @@
           <rect x="180" y="260" width="360" height="76" rx="7" class="s-ok-fill" stroke-width="1.5"/>
           <text x="198" y="284" font-size="12.5" class="s-ok-text">finally &mdash; always</text>
           <text x="198" y="306" font-size="11" class="s-mono">publish(translator.finish(outcome))</text>
-          <text x="198" y="326" font-size="10.5" class="s-sub">flushes open messages, then the terminal status</text>
+          <text x="198" y="326" font-size="10.5" class="s-sub">flushes open messages, then the outcome status</text>
 
           <rect x="580" y="260" width="240" height="76" rx="7" class="s-box" stroke-width="1.5"/>
           <text x="598" y="284" font-size="11.5" class="s-ok-text">complete</text>
           <text x="598" y="304" font-size="11.5" class="s-bad-text">error</text>
           <text x="598" y="324" font-size="11.5" class="s-warn-text">cancelled</text>
+          <text x="598" y="344" font-size="10.5" class="s-accent-text">awaiting_input &mdash; paused, not done</text>
           <line x1="543" y1="298" x2="576" y2="298" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
         </svg>
       </div>
-      <figcaption>The guarantee is structural, not conventional: whether the model errors, the client aborts, or ADK throws, the <code>finally</code> runs and the thread reaches a terminal status with no message left open.</figcaption>
+      <figcaption>The guarantee is structural, not conventional: whether the model errors, the client aborts, or ADK throws, the <code>finally</code> runs with no message left open. Stated precisely, it is now <em>every turn ends in a terminal status, or in <code>awaiting_input</code> with a request the client can answer</em> &mdash; a run paused on a human decision is not finished, and closing it out as <code>complete</code> would be both false and unanswerable.</figcaption>
     </figure>
 
     <p>Without it, a thrown ADK stream would leave a thread on <code>streaming</code> forever &mdash; a blinking caret on a run that ended, with nothing in the UI to say so and no way for the client to find out.</p>
@@ -312,6 +313,38 @@
   </section>
 
   <section>
+    <h2>Three ways to start a turn, one method that runs it</h2>
+    <p class="lede">A thread is a conversation, so it can be entered more than once. What varies is the message; nothing else does.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Entry point</th><th class="mono">newMessage</th><th>Legal from</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">start()</td><td>the opening prompt as text</td><td>&mdash; the thread does not exist yet</td></tr>
+          <tr><td class="mono">followUp()</td><td>the follow-up as text</td><td><code>complete</code>, <code>cancelled</code></td></tr>
+          <tr><td class="mono">respond()</td><td>a <code>functionResponse</code> quoting ADK's interrupt id</td><td><code>awaiting_input</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>All three call the same private <code>run(thread, hub, newMessage)</code>. Sequencing, status stepping, cancellation and teardown are shared, which is the reason this is one method rather than three that would drift. The <strong>session id never changes</strong>, so ADK accumulates the conversation across turns &mdash; that accumulation is what makes a follow-up answerable and a paused tool call resumable.</p>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">01</span><span class="card-name">The translator is seeded with the thread's current status</span></div>
+      <p>Not <code>queued</code>. A second turn starts from wherever the first one stopped, and seeding fresh would have the translator assert its way out of the status machine on the first transition it emitted.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">02</span><span class="card-name">A pause is an outcome, not a failure to finish</span></div>
+      <p>When the ADK stream ends with the translator in <code>awaiting_input</code>, the outcome is <code>awaiting_input</code> &mdash; not <code>complete</code>. It is the one path where a turn settles on a non-terminal status, and getting it wrong would be worse than untidy: a paused thread marked complete is a thread nobody can answer.</p>
+      <p>The runner also records the pending request on the thread record, because the answer arrives on a <em>different</em> HTTP request and that request has to be able to check the id it is answering is the id actually waiting. A stale approval resolving whatever happens to be pending is the failure that guard exists for.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-num">03</span><span class="card-name">One tracker for every detached run</span></div>
+      <p><code>track()</code> exists because there are now three places that start one. Each registers its promise so <code>drain()</code> can await quiescence and the abort controller is released on the way out &mdash; the bookkeeping that used to be inline in <code>start</code> and would otherwise have been copied twice.</p>
+    </div>
+
     <h2>Isolation: a fresh tree and a private session per thread</h2>
 
     <div class="card warn">

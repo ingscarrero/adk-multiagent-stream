@@ -16,6 +16,14 @@ import type { ScriptBranch } from './scripted-llm.ts';
  * either a `transfer` or a direct answer for things needing no tools.
  */
 export const ROUTER_SCRIPT: ScriptBranch[] = [
+  // Before the generic order branch: a *follow-up* has to reach the same
+  // specialist as the turn it follows, and "when will it arrive" shares no
+  // vocabulary with the opening question.
+  { match: /\bwhen will it arrive\b|\beta\b/i, turns: [{ kind: 'transfer', agentName: 'order_agent' }] },
+  // Before the policy branch, which also matches "refund": asking *about* the
+  // refund policy is a question for the knowledge base, while asking *for* a
+  // refund on a named order is an action, and only actions need approving.
+  { match: /\brefund\b[\s\S]*\bA-\d{4}\b/i, turns: [{ kind: 'transfer', agentName: 'order_agent' }] },
   { match: /\b(order|shipping|shipped|delivery|track)\b/i, turns: [{ kind: 'transfer', agentName: 'order_agent' }] },
   { match: /\b(return|refund|warranty|policy)\b/i, turns: [{ kind: 'transfer', agentName: 'kb_agent' }] },
   { match: /\bfail\b/i, turns: [{ kind: 'error', message: 'Simulated upstream model failure.' }] },
@@ -32,6 +40,59 @@ export const ROUTER_SCRIPT: ScriptBranch[] = [
 
 /** Order specialist: looks the order up, then optionally checks the carrier. */
 export const ORDER_AGENT_SCRIPT: ScriptBranch[] = [
+  /**
+   * The follow-up branch, and the reason it uses no tools.
+   *
+   * `completedToolRounds` counts tool responses across the *whole* session, not
+   * just the current turn. A follow-up branch that shared a tool name with the
+   * turn before it would therefore start at turn 1 and silently skip its own
+   * first step -- the same hazard the transfer comment in `scripted-llm.ts`
+   * describes. A tool-free branch has an empty own-tool set, so it always
+   * starts at turn 0 however much history precedes it.
+   *
+   * It is also the honest scripting of the behaviour: answering "when will it
+   * arrive" from what the previous turn already established is exactly what
+   * conversation history is for.
+   */
+  {
+    match: /\bwhen will it arrive\b|\beta\b/i,
+    turns: [
+      {
+        kind: 'text',
+        text: 'Order A-1001 is still on track for 2 September 2026. It cleared the regional hub and is with the local carrier for final delivery.',
+      },
+    ],
+  },
+  /**
+   * The refund branch: one gated tool call, then an answer.
+   *
+   * $129.99 is over `REFUND_APPROVAL_THRESHOLD`, so `requireConfirmation`
+   * returns true and ADK pauses instead of running the tool. Turn 1 is only
+   * reached once someone approves and the tool actually returns.
+   */
+  {
+    match: /\brefund\b/i,
+    turns: [
+      {
+        kind: 'toolCall',
+        calls: [
+          {
+            name: 'requestRefund',
+            args: { orderId: 'A-1001', amount: 129.99, reason: 'Arrived damaged' },
+          },
+        ],
+      },
+      {
+        kind: 'text',
+        text: 'Refund of $129.99 approved and applied to order A-1001. Your confirmation number is RF-A-1001, and the amount should appear within five business days.',
+        // Reached when the approval is denied: ADK returns the call refused
+        // instead of running it, and an answer that claimed otherwise would be
+        // the demo contradicting the feature.
+        rejectedText:
+          'No problem, I have not applied the refund on order A-1001. Let me know if you would like to review the order first or take a different action.',
+      },
+    ],
+  },
   {
     match: /\b(track|shipping|shipped|delivery|where)\b/i,
     turns: [

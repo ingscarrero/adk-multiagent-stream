@@ -91,6 +91,61 @@ export const checkShippingStatus = new FunctionTool({
 });
 
 /** Every tool, by name — used by the eval harness to validate expected trajectories. */
-export const ALL_TOOLS = { lookupOrder, searchKnowledgeBase, checkShippingStatus } as const;
+/**
+ * The one tool that spends the customer's money, and the only one gated on a
+ * human.
+ *
+ * `requireConfirmation` is what makes `awaiting_input` reachable. ADK does not
+ * run the tool on the first pass: it surfaces an `adk_request_confirmation`
+ * interrupt instead, and the run pauses until someone answers. The tool body
+ * below only ever executes after an approval.
+ *
+ * **A predicate, not a flag**, because that is the honest shape of the
+ * requirement. Nobody wants to approve a $4 refund by hand, and everybody wants
+ * to approve a $400 one. Gating on `amount` demonstrates the distinction the
+ * ADK API exists to express &mdash; a boolean would have shown the mechanism
+ * and hidden the reason for it.
+ *
+ * Note the threshold is evaluated against arguments ADK has already validated
+ * against the zod schema, so `amount` is a number here rather than whatever the
+ * model felt like emitting.
+ */
+export const REFUND_APPROVAL_THRESHOLD = 50;
+
+export const requestRefund = new FunctionTool({
+  name: 'requestRefund',
+  description:
+    'Issue a refund against an order. Refunds over $50 require the customer to confirm before they are applied.',
+  parameters: z.object({
+    orderId: z.string().describe('The order id to refund, for example A-1001.'),
+    amount: z.number().positive().describe('Refund amount in US dollars.'),
+    reason: z.string().describe('Why the refund is being issued.'),
+  }),
+  requireConfirmation: ({ amount }) => amount > REFUND_APPROVAL_THRESHOLD,
+  async execute({ orderId, amount, reason }) {
+    await sleep(TOOL_LATENCY_MS);
+    const order = ORDERS[orderId.toUpperCase()];
+    if (!order) {
+      return { refunded: false, orderId, message: `No order matches ${orderId}.` };
+    }
+    // Deliberately not mutating ORDERS: fixed data is what keeps the evals
+    // reproducible, and a refund that changed state would make test order
+    // matter.
+    return {
+      refunded: true,
+      orderId,
+      amount,
+      reason,
+      confirmationNumber: `RF-${orderId.toUpperCase()}`,
+    };
+  },
+});
+
+export const ALL_TOOLS = {
+  lookupOrder,
+  searchKnowledgeBase,
+  checkShippingStatus,
+  requestRefund,
+} as const;
 
 export type ToolName = keyof typeof ALL_TOOLS;

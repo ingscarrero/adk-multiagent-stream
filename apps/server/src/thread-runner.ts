@@ -22,6 +22,7 @@ import { createAgent, type AgentId } from '@feed/agents';
 import { memorySessions, type KnowledgeProvider } from '@feed/providers';
 import {
   assertTransition,
+  canAcceptFollowUp,
   parseFeedEvent,
   type FeedEvent,
   type ThreadStatus,
@@ -32,13 +33,32 @@ import type { SessionHub } from './sse.ts';
 
 const APP_NAME = 'adk-agent-feed';
 
+/**
+ * The message shape ADK accepts, derived from its own signature.
+ *
+ * It is `Content` from `@google/genai`, but importing that here would add a
+ * dependency the server has no other use for -- and pin a second copy of a
+ * package whose version must match ADK's. Deriving it means the type follows
+ * whatever ADK is compiled against.
+ */
+type AdkMessage = NonNullable<Parameters<Runner['runAsync']>[0]['newMessage']>;
+
 export interface ThreadRecord {
   id: string;
   sessionId: string;
   agent: AgentId;
+  /** The opening prompt. Follow-ups do not replace it -- it names the thread. */
   prompt: string;
   status: ThreadStatus;
   createdAt: number;
+  /**
+   * The outstanding human-input request, when the thread is paused on one.
+   *
+   * Held here rather than only on the wire because the answer arrives on a
+   * *different* HTTP request, which has to be able to check that the id being
+   * answered is the id actually pending. Cleared when the run resumes.
+   */
+  pendingRequest?: { requestId: string; toolName?: string };
 }
 
 export interface ThreadRunnerOptions {
@@ -138,15 +158,99 @@ export class ThreadRunner {
       agent: thread.agent,
     });
 
-    const run = opened
-      .then(() => this.run(thread, params.hub))
-      .finally(() => {
-        this.inFlight.delete(run);
-        this.aborts.delete(thread.id);
-      });
-    this.inFlight.add(run);
+    this.track(
+      opened.then(() =>
+        this.run(thread, params.hub, { role: 'user', parts: [{ text: thread.prompt }] }),
+      ),
+      thread.id,
+    );
 
     return thread;
+  }
+
+  /**
+   * Continues an existing thread with a follow-up message.
+   *
+   * The whole feature is one line of ADK: run again against the same
+   * `sessionId`. ADK accumulates the conversation there, so the agent sees the
+   * earlier turns without anything being re-sent. What this method adds is the
+   * bookkeeping around that -- re-entering the status machine, and emitting the
+   * user's message so it lands in the transcript in the right place.
+   */
+  followUp(params: { threadId: string; prompt: string; hub: SessionHub }): ThreadRecord | undefined {
+    const thread = this.threads.get(params.threadId);
+    if (!thread || !canAcceptFollowUp(thread.status)) return undefined;
+
+    const opened = this.emit(params.hub, thread.id, {
+      type: 'message.user',
+      text: params.prompt,
+    });
+
+    this.track(
+      opened.then(() =>
+        this.run(thread, params.hub, {
+          role: 'user',
+          parts: [{ text: params.prompt }],
+        }),
+      ),
+      thread.id,
+    );
+    return thread;
+  }
+
+  /**
+   * Answers the human-input request a paused thread is blocked on.
+   *
+   * The reply is a `functionResponse` quoting ADK's interrupt id, which ADK's
+   * `RequestConfirmationLlmRequestProcessor` finds in session history and uses
+   * to re-invoke the gated tool -- with the decision, so a denial is delivered
+   * to the tool as a refusal rather than silently dropping the call.
+   *
+   * `requestId` must match what is actually pending. A stale approval answering
+   * whatever happens to be waiting is the failure this guard exists to prevent;
+   * ADK makes the same check on its side and fails closed.
+   */
+  respond(params: {
+    threadId: string;
+    requestId: string;
+    approved: boolean;
+    hub: SessionHub;
+  }): 'accepted' | 'not-pending' | 'wrong-request' | 'unknown-thread' {
+    const thread = this.threads.get(params.threadId);
+    if (!thread) return 'unknown-thread';
+    if (thread.status !== 'awaiting_input' || !thread.pendingRequest) return 'not-pending';
+    if (thread.pendingRequest.requestId !== params.requestId) return 'wrong-request';
+
+    const { requestId } = thread.pendingRequest;
+    delete thread.pendingRequest;
+
+    this.track(
+      this.run(thread, params.hub, {
+        role: 'user',
+        parts: [
+          {
+            functionResponse: {
+              id: requestId,
+              name: 'adk_request_confirmation',
+              // ADK's ToolConfirmation shape. `confirmed: false` is a decision,
+              // not an absence of one -- the tool is told it was refused.
+              response: { confirmed: params.approved },
+            },
+          },
+        ],
+      }),
+      thread.id,
+    );
+    return 'accepted';
+  }
+
+  /** Registers a detached run so `drain` can await it. */
+  private track(run: Promise<void>, threadId: string): void {
+    const tracked = run.finally(() => {
+      this.inFlight.delete(tracked);
+      this.aborts.delete(threadId);
+    });
+    this.inFlight.add(tracked);
   }
 
   /** Requests cancellation. Idempotent, and a no-op on an already-finished thread. */
@@ -186,11 +290,27 @@ export class ThreadRunner {
     return event;
   }
 
-  private async run(thread: ThreadRecord, hub: SessionHub): Promise<void> {
+  /**
+   * Runs one turn: a fresh ADK invocation against the thread's existing session.
+   *
+   * Called for the opening prompt, for a follow-up, and to resume after an
+   * approval. The only thing that differs between the three is `newMessage` --
+   * everything about sequencing, status and teardown is shared, which is why
+   * this is one method rather than three that would drift.
+   *
+   * The translator is seeded with the thread's *current* status rather than
+   * `queued`, so a second turn transitions from where the first one left off
+   * instead of asserting its way out of the status machine.
+   */
+  private async run(
+    thread: ThreadRecord,
+    hub: SessionHub,
+    newMessage: AdkMessage,
+  ): Promise<void> {
     const controller = new AbortController();
     this.aborts.set(thread.id, controller);
 
-    const translator = new AdkEventTranslator('queued');
+    const translator = new AdkEventTranslator(thread.status);
     const publish = async (drafts: FeedEventDraft[]) => {
       // Sequentially: drafts from one translate() call are ordered, and a
       // remote stream must receive them in that order.
@@ -200,6 +320,12 @@ export class ThreadRunner {
           // The record's status and the translator's are stepped together, so
           // a divergence would be an immediate assertion failure.
           thread.status = assertTransition(thread.status, event.status);
+        }
+        if (event.type === 'thread.input_required') {
+          thread.pendingRequest = {
+            requestId: event.requestId,
+            ...(event.toolName ? { toolName: event.toolName } : {}),
+          };
         }
       }
     };
@@ -234,7 +360,7 @@ export class ThreadRunner {
       for await (const event of runner.runAsync({
         userId: thread.sessionId,
         sessionId: thread.id,
-        newMessage: { role: 'user', parts: [{ text: thread.prompt }] },
+        newMessage,
         runConfig: {
           streamingMode: StreamingMode.SSE,
           maxLlmCalls: this.options.maxLlmCalls ?? 20,
@@ -246,6 +372,10 @@ export class ThreadRunner {
 
       if (controller.signal.aborted) outcome = 'cancelled';
       else if (translator.currentStatus === 'error') outcome = 'error';
+      // A run that paused for a human is not finished, and closing it out as
+      // `complete` would both lie and make the thread unanswerable. This is the
+      // one path where the turn ends on a non-terminal status.
+      else if (translator.currentStatus === 'awaiting_input') outcome = 'awaiting_input';
     } catch (error) {
       if (controller.signal.aborted) {
         outcome = 'cancelled';
@@ -254,8 +384,10 @@ export class ThreadRunner {
         await publish(translator.fail(error instanceof Error ? error.message : String(error)));
       }
     } finally {
-      // The guarantee: whatever happened above, the thread reaches a terminal
-      // status and any half-written message is closed out.
+      // The guarantee, stated precisely: every turn ends in a terminal status,
+      // or in `awaiting_input` with a request the client can answer. Nothing
+      // else. Either way any half-written message is closed out, so no caret is
+      // left blinking on a thread that has stopped.
       await publish(translator.finish(outcome));
     }
   }

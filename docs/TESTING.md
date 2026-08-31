@@ -27,14 +27,14 @@ on the critical path of CI.
 
 | Layer | Runner | Count | What it proves |
 |---|---|---|---|
-| Protocol, reducer & components | Vitest (node/jsdom) | 95 | Ordering rules, status machine, wire schemas, the stream hook |
-| Server | Vitest (node) | 49 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation, and the two memory bounds |
+| Protocol, reducer & components | Vitest (node/jsdom) | 111 | Ordering rules, status machine, wire schemas, the stream hook, follow-up and approval state |
+| Server | Vitest (node) | 63 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation, the two memory bounds, follow-up turns and the confirmation gate |
 | Providers | Vitest (node) | 39 | Config validation, plus contract suites for the knowledge and event-stream ports |
 | Evals | Vitest (node) | 25 | Retrieval metrics and the agent regression gate |
-| ADK integration | Vitest (node) | 23 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
-| Browser | Playwright | 63 | The whole stack, in two engines plus a small-buffer recovery project |
+| ADK integration | Vitest (node) | 28 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
+| Browser | Playwright | 81 | The whole stack, in two engines plus a small-buffer recovery project |
 
-231 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
+259 in `pnpm test`, 81 in `pnpm test:e2e`, and 7 eval cases that run both as a
 CLI and inside the unit suite.
 
 ### Contract tests
@@ -152,11 +152,12 @@ equivalent. `packages/eval` is a small reimplementation in TypeScript, using
 ADK's metric names so the numbers mean the same thing.
 
 ```
-support — 6 cases
+support — 7 cases
   ✓ order-tracking             traj 1.00  resp 0.94  315ms
   ✓ warranty-policy            traj 1.00  resp 1.00  191ms
   ...
-6/6 passed  (avg trajectory 1.00, avg response 0.89)
+  ✓ refund-requires-approval   traj 1.00  resp 1.00    3ms
+7/7 passed  (avg trajectory 1.00, avg response 0.90)
 ```
 
 | Metric | What it measures |
@@ -167,6 +168,12 @@ support — 6 cases
 Trajectory matters more than it first appears: two agents can produce the same
 final answer while one looked the order up and the other guessed. Only the
 trajectory tells them apart.
+
+`refund-requires-approval` is trajectory-only by design, and is the clearest
+case for why the metric exists. The run pauses on a confirmation gate, so there
+is no answer text to score at all — the entire assertion is that the agent
+requested the refund **and then stopped**. A response metric could not express
+that; the trajectory is the behaviour.
 
 The same evalset runs inside `pnpm test`, so a prompt or graph change cannot
 land without the behavioural expectations being rechecked.
@@ -225,10 +232,12 @@ restore depends on what a thread costs. That is not a constant &mdash; it falls
 out of the agent's shape:
 
 ```
-events = 5 + 4T + ceil(W / 3)
+events = 5 + 4T + ceil(W / 3)      per TURN, not per thread
 
   5          thread.created, running, streaming, message.complete, and the
-             terminal status: every thread pays these
+             closing status: every turn pays these. A follow-up turn pays
+             4 of them -- there is no second thread.created, and it opens
+             with a message.user instead
   4 per tool call.call, awaiting_tool, tool.result, running
   W / 3      one message.delta per three words (ScriptedLlm's wordsPerChunk)
 ```
@@ -255,6 +264,13 @@ So the retained window is somewhere between roughly `buffer / 40` and
 
 (Measured with the order-tracking prompt throughout. A mixed session retains
 more threads, because most cost fewer than 23 events.)
+
+**A thread with follow-ups costs more than one turn.** The window is counted in
+events, so a conversation of three turns occupies roughly three threads' worth
+of it. That makes the readable window shorter in threads than the table above
+suggests for anyone who actually holds a conversation &mdash; which is another
+way of saying [L16](LIMITATIONS.md#l16) got slightly worse when threads learned
+to continue.
 
 ### What changes with real Gemini
 

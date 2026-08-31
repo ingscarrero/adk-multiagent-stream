@@ -182,7 +182,7 @@
   <header class="masthead">
     <p class="eyebrow">adk-agent-feed &middot; review notes</p>
     <h1>No Sleeps, No Selectors</h1>
-    <p class="standfirst">38 test declarations, 63 runs, three projects and four servers &mdash; and one project that exists because the other two were green while the feature was broken.</p>
+    <p class="standfirst">47 test declarations, 81 runs, three projects and four servers &mdash; and one project that exists because the other two were green while the feature was broken.</p>
     <span class="filepath">e2e/ + playwright.config.ts</span>
     <p class="siblings">Also in this set: <a href="overview.html">Prompt to Pixel</a> &middot; <a href="architecture.html">The Substrate Line</a> &middot; <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a> &middot; <a href="evals.html">Trajectory Over Answer</a></p>
   </header>
@@ -263,11 +263,11 @@
 
   <section>
     <h2>Three projects over four servers</h2>
-    <p class="lede">38 test declarations, 63 runs. The arithmetic is worth following, because the third project exists for a reason the other two could not cover.</p>
+    <p class="lede">47 test declarations, 81 runs. The arithmetic is worth following, because the third project exists for a reason the other two could not cover.</p>
 
     <figure>
       <div class="figframe">
-        <svg viewBox="0 0 840 320" role="img" aria-label="Three Playwright projects and the servers they run against. Chromium and Firefox both use the default pair, an API server on port 3001 and Vite on 5173 with a 500 event retention. Chromium runs 34 tests, skipping recovery. Firefox runs 25, skipping accessibility and recovery. The recovery project uses a separate pair on ports 3002 and 5174 with a 40 event retention, and runs 4 tests.">
+        <svg viewBox="0 0 840 320" role="img" aria-label="Three Playwright projects and the servers they run against. Chromium and Firefox both use the default pair, an API server on port 3001 and Vite on 5173 with a 500 event retention. Chromium runs 43 tests, skipping recovery. Firefox runs 34, skipping accessibility and recovery. The recovery project uses a separate pair on ports 3002 and 5174 with a 40 event retention, and runs 4 tests.">
           <defs><marker id="e2-ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
 
           <text x="0" y="16" font-size="10.5" class="s-sub" letter-spacing="1.2">PROJECTS</text>
@@ -275,12 +275,12 @@
 
           <rect x="0" y="30" width="250" height="66" rx="7" class="s-box" stroke-width="1.5"/>
           <text x="18" y="52" font-size="12" class="s-title">chromium</text>
-          <text x="18" y="72" font-size="11" class="s-mono">34 tests</text>
+          <text x="18" y="72" font-size="11" class="s-mono">43 tests</text>
           <text x="18" y="89" font-size="10.5" class="s-sub">testIgnore: recovery</text>
 
           <rect x="0" y="108" width="250" height="66" rx="7" class="s-box" stroke-width="1.5"/>
           <text x="18" y="130" font-size="12" class="s-title">firefox</text>
-          <text x="18" y="150" font-size="11" class="s-mono">25 tests</text>
+          <text x="18" y="150" font-size="11" class="s-mono">34 tests</text>
           <text x="18" y="167" font-size="10.5" class="s-sub">testIgnore: a11y, recovery</text>
 
           <rect x="0" y="200" width="250" height="82" rx="7" class="s-accent-fill" stroke-width="1.5"/>
@@ -317,6 +317,7 @@
           <tr><td class="mono">resilience.spec.ts</td><td class="mono">10</td><td>Cancel mid-stream leaves no message stuck streaming and no other thread affected; reload restores; reconnect does not duplicate; the composer never locks</td></tr>
           <tr><td class="mono">a11y.spec.ts</td><td class="mono">9</td><td>axe over empty, streaming, errored and dark states, plus the judgements axe cannot make</td></tr>
           <tr><td class="mono">concurrency.spec.ts</td><td class="mono">6</td><td>Three threads to completion with independent transcripts, uncorrupted text across the interleave, an accurate active count</td></tr>
+          <tr><td class="mono">conversation.spec.ts</td><td class="mono">9</td><td>Follow-up turns continuing one thread, and the human-in-the-loop gate: pausing with the arguments shown, approving, denying, and a paused thread not blocking the feed</td></tr>
           <tr><td class="mono">recovery.spec.ts</td><td class="mono">4</td><td>Overrun, resync, and the counters that make it visible</td></tr>
         </tbody>
       </table>

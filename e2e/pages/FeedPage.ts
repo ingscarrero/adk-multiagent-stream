@@ -116,6 +116,32 @@ export class FeedPage {
     await stop.click({ timeout: 5_000 });
   }
 
+  /** The per-thread follow-up composer. Only present once a turn has finished. */
+  followUpInput(thread: Locator): Locator {
+    return thread.getByTestId('follow-up-input');
+  }
+
+  /** Sends a follow-up inside a thread, via the thread's own composer. */
+  async sendFollowUp(thread: Locator, prompt: string): Promise<void> {
+    await this.followUpInput(thread).fill(prompt);
+    await thread.getByTestId('follow-up-send').click();
+  }
+
+  /** The user's own messages in a thread, in render order. */
+  userMessages(thread: Locator): Locator {
+    return thread.getByTestId('user-message');
+  }
+
+  /** The approval control, present only while the thread waits on a decision. */
+  approval(thread: Locator): Locator {
+    return thread.getByTestId('approval-prompt');
+  }
+
+  /** Approves or denies whatever the thread is paused on. */
+  async decide(thread: Locator, approve: boolean): Promise<void> {
+    await thread.getByTestId(approve ? 'approve' : 'deny').click();
+  }
+
   /** Concatenated text of every message in a thread, in render order. */
   async transcript(thread: Locator): Promise<string[]> {
     return this.messages(thread).getByTestId('message-text').allTextContents();

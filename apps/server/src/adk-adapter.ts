@@ -21,7 +21,7 @@
  * owns ordering. It emits *drafts*, and `ThreadRunner` stamps them.
  */
 
-import type { Event } from '@google/adk';
+import { getUserInputRequests, type Event } from '@google/adk';
 import {
   canTransition,
   type FeedEvent,
@@ -61,6 +61,16 @@ export function resetMessageIds(): void {
 export class AdkEventTranslator {
   /** In-flight messages, keyed by author. See the class docstring. */
   private readonly openMessages = new Map<string, { messageId: string; text: string }>();
+  /**
+   * Arguments of tool calls seen but not yet resolved, keyed by tool name.
+   *
+   * Exists for one reason: a confirmation request names the tool it is gating
+   * but not the arguments it would run with, and "approve requestRefund" is a
+   * materially worse question to put to a person than "approve a $129.99 refund
+   * on order A-1001". ADK emits the call and the interrupt as two consecutive
+   * events, so the args are always already here when the request arrives.
+   */
+  private readonly pendingToolArgs = new Map<string, Record<string, unknown>>();
 
   private status: ThreadStatus;
 
@@ -127,6 +137,7 @@ export class AdkEventTranslator {
 
     // --- Tool results come first: they close out an awaiting_tool state. ---
     for (const response of functionResponses) {
+      this.pendingToolArgs.delete(response.name ?? '');
       drafts.push({
         type: 'tool.result',
         callId: response.id ?? `${author}:${response.name ?? 'unknown'}`,
@@ -174,18 +185,44 @@ export class AdkEventTranslator {
         name: call.name ?? 'unknown',
         args: call.args ?? {},
       });
+      this.pendingToolArgs.set(call.name ?? 'unknown', call.args ?? {});
     }
     if (toolCalls.length > 0) {
       drafts.push(...this.setStatus('awaiting_tool'));
     }
+
+    // A pause is not visible in an event's text -- it is a functionCall part
+    // named `adk_request_*`, with everything useful buried in its args. ADK
+    // ships `getUserInputRequests` to flatten the three encodings into one
+    // shape, so this does not have to know how each kind stores its id.
     if (humanInput.length > 0) {
+      for (const request of getUserInputRequests(event)) {
+        const args = request.toolName ? this.pendingToolArgs.get(request.toolName) : undefined;
+        drafts.push({
+          type: 'thread.input_required',
+          requestId: request.interruptId,
+          kind: request.kind,
+          ...(request.toolName ? { toolName: request.toolName } : {}),
+          ...(args ? { toolArgs: args } : {}),
+          ...(request.message ? { prompt: request.message } : {}),
+        });
+      }
+      // Status last, so a client that stops at the status already has the
+      // request in hand -- the same reason `thread.error` precedes its status.
       drafts.push(...this.setStatus('awaiting_input'));
     }
 
     return drafts;
   }
 
-  /** Closes the thread out. Called by `ThreadRunner` when the ADK stream ends. */
+  /**
+   * Closes the turn out. Called by `ThreadRunner` when the ADK stream ends.
+   *
+   * `final` is usually terminal, and is `awaiting_input` when the run paused on
+   * a human decision -- the one case where a turn ends without the thread
+   * ending. Setting the same status twice is a no-op, so passing
+   * `awaiting_input` when the translator is already there emits nothing.
+   */
   finish(final: ThreadStatus): FeedEventDraft[] {
     const drafts: FeedEventDraft[] = [];
 

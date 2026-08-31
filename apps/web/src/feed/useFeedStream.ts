@@ -61,6 +61,10 @@ export interface UseFeedStream {
   lastError: string | null;
   startThread: (prompt: string, agent: string) => Promise<void>;
   cancelThread: (threadId: string) => Promise<void>;
+  /** Sends a follow-up into an existing thread. */
+  followUp: (threadId: string, prompt: string) => Promise<void>;
+  /** Answers a human-input request the thread is paused on. */
+  respond: (threadId: string, requestId: string, approved: boolean) => Promise<void>;
 }
 
 export function useFeedStream(): UseFeedStream {
@@ -215,7 +219,59 @@ export function useFeedStream(): UseFeedStream {
     }
   }, []);
 
-  return { state, sessionId, connection, lastError, startThread, cancelThread };
+  // Both of these follow `startThread`'s shape exactly: POST, report a failure
+  // to accept, and update nothing locally. The consequences arrive on the
+  // stream, so the reducer still has exactly one input.
+  const followUp = useCallback(
+    async (threadId: string, prompt: string) => {
+      setLastError(null);
+      try {
+        const response = await fetch(
+          `/api/threads/${encodeURIComponent(threadId)}/messages`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+            body: JSON.stringify({ prompt }),
+          },
+        );
+        if (!response.ok) setLastError(`Could not send the follow-up (${response.status})`);
+      } catch {
+        setLastError('Could not reach the server.');
+      }
+    },
+    [sessionId],
+  );
+
+  const respond = useCallback(
+    async (threadId: string, requestId: string, approved: boolean) => {
+      setLastError(null);
+      try {
+        const response = await fetch(
+          `/api/threads/${encodeURIComponent(threadId)}/respond`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+            body: JSON.stringify({ requestId, approved }),
+          },
+        );
+        if (!response.ok) setLastError(`Could not send your decision (${response.status})`);
+      } catch {
+        setLastError('Could not reach the server.');
+      }
+    },
+    [sessionId],
+  );
+
+  return {
+    state,
+    sessionId,
+    connection,
+    lastError,
+    startThread,
+    cancelThread,
+    followUp,
+    respond,
+  };
 }
 
 function safeJsonParse(raw: string): unknown {

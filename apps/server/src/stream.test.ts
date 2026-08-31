@@ -108,6 +108,251 @@ const terminal = (events: FeedEvent[], threadId: string) =>
       ['complete', 'error', 'cancelled'].includes(e.status),
   );
 
+/** Sends a follow-up into an existing thread. */
+async function followUp(sessionId: string, threadId: string, prompt: string) {
+  return fetch(`${baseUrl}/api/threads/${threadId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+/** Answers a pending human-input request. */
+async function respond(
+  sessionId: string,
+  threadId: string,
+  requestId: string,
+  approved: boolean,
+) {
+  return fetch(`${baseUrl}/api/threads/${threadId}/respond`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId },
+    body: JSON.stringify({ requestId, approved }),
+  });
+}
+
+const statusesOf = (events: FeedEvent[], threadId: string) =>
+  events
+    .filter((e) => e.threadId === threadId && e.type === 'thread.status')
+    .map((e) => (e as Extract<FeedEvent, { type: 'thread.status' }>).status);
+
+const textOf = (events: FeedEvent[], threadId: string) =>
+  events
+    .filter((e) => e.threadId === threadId && e.type === 'message.complete')
+    .map((e) => (e as Extract<FeedEvent, { type: 'message.complete' }>).text)
+    .join(' ');
+
+describe('follow-up messages (L4)', () => {
+  it('continues a finished thread in place, keeping one thread and one seq run', async () => {
+    const sessionId = 's-followup';
+    const { threadId } = await startThread(sessionId, 'Where is my order, can you track shipping?');
+
+    const first = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}`,
+      (events) => terminal(events, threadId),
+    );
+    expect(statusesOf(first.events, threadId).at(-1)).toBe('complete');
+    const seqBefore = Math.max(...first.events.map((e) => e.seq));
+
+    const response = await followUp(sessionId, threadId, 'When will it arrive?');
+    expect(response.status).toBe(202);
+
+    // Resume from where the first read stopped, so this asserts only on what
+    // the follow-up produced.
+    const second = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}&lastEventId=${first.ids.at(-1)}`,
+      (events) => terminal(events, threadId),
+    );
+
+    // Same thread: no second thread.created anywhere.
+    expect(second.events.filter((e) => e.type === 'thread.created')).toHaveLength(0);
+    // The sequence continues rather than restarting -- a client that watched
+    // both turns sees one contiguous run.
+    expect(Math.min(...second.events.map((e) => e.seq))).toBe(seqBefore + 1);
+    expect(second.events.some((e) => e.type === 'message.user')).toBe(true);
+    expect(statusesOf(second.events, threadId)).toContain('running');
+    expect(statusesOf(second.events, threadId).at(-1)).toBe('complete');
+  });
+
+  it('answers the follow-up from conversation history, not from the new prompt alone', async () => {
+    // "When will it arrive?" names no order. An answer that mentions A-1001
+    // could only come from the turn before it, which is the whole point of
+    // reusing the ADK session.
+    const sessionId = 's-followup-context';
+    const { threadId } = await startThread(sessionId, 'Where is my order, can you track shipping?');
+    const first = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}`,
+      (events) => terminal(events, threadId),
+    );
+
+    await followUp(sessionId, threadId, 'When will it arrive?');
+    const second = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}&lastEventId=${first.ids.at(-1)}`,
+      (events) => terminal(events, threadId),
+    );
+
+    expect(textOf(second.events, threadId)).toContain('A-1001');
+  });
+
+  it('refuses a follow-up on a thread that never existed, and on someone else\'s', async () => {
+    const sessionId = 's-followup-guard';
+    const { threadId } = await startThread(sessionId, 'hello there');
+    await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+
+    expect((await followUp(sessionId, 'thr-nope', 'hi')).status).toBe(404);
+    // A thread belongs to the session that created it. Answering 404 rather
+    // than 403 leaks less about what exists.
+    expect((await followUp('someone-else', threadId, 'hi')).status).toBe(404);
+  });
+
+  it('refuses a follow-up on an errored thread with 409, not 404', async () => {
+    // The thread exists and the request is well-formed; the *state* refuses it.
+    // A client deciding whether to retry needs that distinction.
+    const sessionId = 's-followup-errored';
+    const { threadId } = await startThread(sessionId, 'please fail this run');
+    await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+
+    const response = await followUp(sessionId, threadId, 'try again?');
+    expect(response.status).toBe(409);
+  });
+});
+
+describe('human-in-the-loop confirmation (L5)', () => {
+  const REFUND = 'Refund order A-1001, it arrived damaged';
+
+  /** Runs a thread up to the point where it pauses on a confirmation. */
+  async function runToPause(sessionId: string) {
+    const { threadId } = await startThread(sessionId, REFUND);
+    const paused = await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      events.some(
+        (e) => e.threadId === threadId && e.type === 'thread.status' && e.status === 'awaiting_input',
+      ),
+    );
+    const request = paused.events.find((e) => e.type === 'thread.input_required');
+    return { threadId, paused, request };
+  }
+
+  it('pauses on awaiting_input rather than completing, and says what it is asking', async () => {
+    const { threadId, paused, request } = await runToPause('s-hitl-pause');
+
+    expect(request).toMatchObject({
+      type: 'thread.input_required',
+      kind: 'confirmation',
+      toolName: 'requestRefund',
+      // The arguments are the point: "approve requestRefund" is the same
+      // sentence for $4 and $400.
+      toolArgs: { orderId: 'A-1001', amount: 129.99 },
+    });
+    expect(statusesOf(paused.events, threadId).at(-1)).toBe('awaiting_input');
+    // Crucially NOT complete: a paused run that closed itself out as finished
+    // would be both a lie and unanswerable.
+    expect(statusesOf(paused.events, threadId)).not.toContain('complete');
+  });
+
+  it('does not run the gated tool before approval', async () => {
+    const { threadId, paused } = await runToPause('s-hitl-not-yet');
+    const results = paused.events.filter(
+      (e) => e.threadId === threadId && e.type === 'tool.result',
+    );
+    expect(results.map((e) => (e as Extract<FeedEvent, { type: 'tool.result' }>).name)).not.toContain(
+      'requestRefund',
+    );
+  });
+
+  it('runs the tool and finishes the turn once approved', async () => {
+    const sessionId = 's-hitl-approve';
+    const { threadId, paused, request } = await runToPause(sessionId);
+
+    const response = await respond(sessionId, threadId, request!.requestId, true);
+    expect(response.status).toBe(202);
+
+    const resumed = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}&lastEventId=${paused.ids.at(-1)}`,
+      (events) => terminal(events, threadId),
+    );
+
+    const names = resumed.events
+      .filter((e) => e.type === 'tool.result')
+      .map((e) => e.name);
+    expect(names).toContain('requestRefund');
+    expect(textOf(resumed.events, threadId)).toContain('RF-A-1001');
+    expect(statusesOf(resumed.events, threadId).at(-1)).toBe('complete');
+  });
+
+  it('finishes without applying the refund when denied', async () => {
+    const sessionId = 's-hitl-deny';
+    const { threadId, paused, request } = await runToPause(sessionId);
+
+    expect((await respond(sessionId, threadId, request!.requestId, false)).status).toBe(202);
+
+    const resumed = await readStream(
+      `${baseUrl}/api/stream?sessionId=${sessionId}&lastEventId=${paused.ids.at(-1)}`,
+      (events) => terminal(events, threadId),
+    );
+
+    // The tool did not run. ADK returns the call refused rather than dropping
+    // it, so the refusal is observable where the next model turn would look.
+    const result = resumed.events.find(
+      (e) => e.type === 'tool.result' && e.name === 'requestRefund',
+    ) as Extract<FeedEvent, { type: 'tool.result' }> | undefined;
+    expect(result?.result).toMatchObject({ error: expect.stringContaining('rejected') });
+
+    // And the answer reflects it. Worth asserting because the first version of
+    // this did not: the script had one text turn, so a denied refund reported
+    // itself as approved while every other assertion passed.
+    expect(textOf(resumed.events, threadId)).not.toContain('RF-A-1001');
+    expect(textOf(resumed.events, threadId)).toContain('not applied the refund');
+
+    // A denial is a decision, not a dropped call: the turn still terminates.
+    expect(statusesOf(resumed.events, threadId).at(-1)).toBe('complete');
+  });
+
+  it('rejects an answer that names a different request', async () => {
+    const sessionId = 's-hitl-stale';
+    const { threadId } = await runToPause(sessionId);
+
+    // The guard against a stale click authorising whatever happens to be
+    // pending by the time it lands.
+    const response = await respond(sessionId, threadId, 'adk-not-the-pending-one', true);
+    expect(response.status).toBe(409);
+  });
+
+  it('rejects an answer for a thread that is not waiting on anything', async () => {
+    const sessionId = 's-hitl-not-waiting';
+    const { threadId } = await startThread(sessionId, 'hello there');
+    await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
+      terminal(events, threadId),
+    );
+
+    expect((await respond(sessionId, threadId, 'anything', true)).status).toBe(409);
+  });
+
+  it('a small refund is not gated at all', async () => {
+    // `requireConfirmation` is a predicate, not a flag. Nobody wants to approve
+    // a $4 refund by hand, and the whole reason ADK takes a function here is to
+    // express that -- so the low-value path must genuinely not pause.
+    const { requestRefund, REFUND_APPROVAL_THRESHOLD } = await import('@feed/agents');
+    expect(
+      await requestRefund.checkRequireConfirmation({
+        orderId: 'A-1001',
+        amount: REFUND_APPROVAL_THRESHOLD - 1,
+        reason: 'x',
+      }),
+    ).toBe(false);
+    expect(
+      await requestRefund.checkRequireConfirmation({
+        orderId: 'A-1001',
+        amount: REFUND_APPROVAL_THRESHOLD + 1,
+        reason: 'x',
+      }),
+    ).toBe(true);
+  });
+});
+
 describe('single thread', () => {
   it('streams a thread from creation to completion in seq order', async () => {
     const sessionId = 's-single';

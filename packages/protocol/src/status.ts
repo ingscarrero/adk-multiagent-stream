@@ -31,7 +31,18 @@ export const THREAD_STATUSES = [
 
 export type ThreadStatus = (typeof THREAD_STATUSES)[number];
 
-/** Statuses from which no further transition is legal. */
+/**
+ * Statuses that end a **turn**.
+ *
+ * Not statuses that end a *thread*. A thread is a conversation and may take a
+ * follow-up; a turn is one prompt and the run it triggers. `complete` and
+ * `cancelled` therefore have exactly one outgoing edge -- back to `running`,
+ * when the user sends another message ({@link canAcceptFollowUp}).
+ *
+ * `error` does not: a run that failed has an unknown amount of state half
+ * applied, and inviting the user to continue on top of it is a worse experience
+ * than asking them to start again.
+ */
 export const TERMINAL_STATUSES = ['complete', 'error', 'cancelled'] as const satisfies readonly ThreadStatus[];
 
 export type TerminalThreadStatus = (typeof TERMINAL_STATUSES)[number];
@@ -53,11 +64,26 @@ const TRANSITIONS: Readonly<Record<ThreadStatus, readonly ThreadStatus[]>> = {
   streaming: ['running', 'awaiting_tool', 'awaiting_input', 'complete', 'cancelled', 'error'],
   // After a tool returns, the agent goes back to the model, which may stream
   // again or immediately call another tool.
-  awaiting_tool: ['running', 'streaming', 'awaiting_tool', 'complete', 'cancelled', 'error'],
+  // `awaiting_tool -> awaiting_input` is the confirmation gate: ADK emits the
+  // tool call first and the `adk_request_confirmation` interrupt immediately
+  // after, so the thread passes through `awaiting_tool` on its way to being
+  // blocked on a human. Found by `assertTransition` throwing, which is what it
+  // is for.
+  awaiting_tool: [
+    'running',
+    'streaming',
+    'awaiting_tool',
+    'awaiting_input',
+    'complete',
+    'cancelled',
+    'error',
+  ],
   awaiting_input: ['running', 'streaming', 'cancelled', 'error'],
-  complete: [],
+  // A follow-up message re-enters a finished turn. See TERMINAL_STATUSES for
+  // why `error` is not in this club.
+  complete: ['running'],
   error: [],
-  cancelled: [],
+  cancelled: ['running'],
 };
 
 /** Whether `to` is a legal successor of `from`. */
@@ -88,4 +114,28 @@ export function assertTransition(from: ThreadStatus, to: ThreadStatus): ThreadSt
 /** Whether the thread is doing work the user should see a spinner for. */
 export function isActive(status: ThreadStatus): boolean {
   return !isTerminal(status);
+}
+
+/**
+ * Whether the thread will accept another user message.
+ *
+ * Distinct from `isTerminal` on purpose, and the two disagree for exactly one
+ * status: `error`. A thread is *finished* in both senses there, while
+ * `complete` and `cancelled` are finished as turns and open as conversations.
+ * The UI reads this to decide whether to offer a composer.
+ */
+export function canAcceptFollowUp(status: ThreadStatus): boolean {
+  return status === 'complete' || status === 'cancelled';
+}
+
+/**
+ * Whether the thread is paused on a human decision.
+ *
+ * Separate from `isActive`, which is also true here: the thread has not
+ * finished, but nothing is happening and nothing will until a person answers.
+ * That difference is why the UI shows an approval control rather than a
+ * spinner.
+ */
+export function isAwaitingUser(status: ThreadStatus): boolean {
+  return status === 'awaiting_input';
 }

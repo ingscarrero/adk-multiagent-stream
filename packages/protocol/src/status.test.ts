@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  canAcceptFollowUp,
   THREAD_STATUSES,
   TERMINAL_STATUSES,
   assertTransition,
@@ -19,11 +20,21 @@ const EXPECTED: Record<ThreadStatus, ThreadStatus[]> = {
   queued: ['running', 'cancelled', 'error'],
   running: ['streaming', 'awaiting_tool', 'awaiting_input', 'complete', 'cancelled', 'error'],
   streaming: ['running', 'awaiting_tool', 'awaiting_input', 'complete', 'cancelled', 'error'],
-  awaiting_tool: ['running', 'streaming', 'awaiting_tool', 'complete', 'cancelled', 'error'],
+  awaiting_tool: [
+    'running',
+    'streaming',
+    'awaiting_tool',
+    // The confirmation gate: ADK emits the tool call, then the interrupt.
+    'awaiting_input',
+    'complete',
+    'cancelled',
+    'error',
+  ],
   awaiting_input: ['running', 'streaming', 'cancelled', 'error'],
-  complete: [],
+  // A finished turn re-opens for a follow-up. `error` does not.
+  complete: ['running'],
   error: [],
-  cancelled: [],
+  cancelled: ['running'],
 };
 
 describe('canTransition', () => {
@@ -33,11 +44,34 @@ describe('canTransition', () => {
     }
   });
 
-  it('never allows a transition out of a terminal status', () => {
+  it('lets a terminal status re-open only into running, and only for a follow-up', () => {
+    // The weakest form of the old assertion that is still true, and the reason
+    // it had to weaken: `complete` ends a *turn*, not a conversation. What must
+    // not happen is a terminal status reaching any *other* state -- a finished
+    // thread must never appear to be streaming or awaiting a tool.
     for (const from of TERMINAL_STATUSES) {
       for (const to of THREAD_STATUSES) {
-        expect(canTransition(from, to)).toBe(false);
+        const legal = to === 'running' && canAcceptFollowUp(from);
+        expect(canTransition(from, to), `${from} -> ${to}`).toBe(legal);
       }
+    }
+  });
+
+  it('never re-opens an errored thread', () => {
+    // A failed run left an unknown amount of work half applied. Continuing on
+    // top of it is a worse experience than starting again, so this is a
+    // deliberate asymmetry rather than an oversight.
+    for (const to of THREAD_STATUSES) {
+      expect(canTransition('error', to), `error -> ${to}`).toBe(false);
+    }
+    expect(canAcceptFollowUp('error')).toBe(false);
+  });
+
+  it('agrees with canAcceptFollowUp about which statuses re-open', () => {
+    for (const status of THREAD_STATUSES) {
+      expect(canTransition(status, 'running') && isTerminal(status)).toBe(
+        canAcceptFollowUp(status),
+      );
     }
   });
 

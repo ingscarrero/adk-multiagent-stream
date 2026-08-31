@@ -331,6 +331,34 @@
   </section>
 
   <section>
+    <h2>The one place a script reads a tool result</h2>
+    <p class="lede">"Stateless by construction" is still true, and it needed one carefully bounded exception.</p>
+
+    <p>Everything above derives the next turn from two things: the latest user text, which picks the branch, and the number of completed tool rounds, which picks the position within it. Neither looks at what a tool actually <em>returned</em>. That is deliberate &mdash; it is what keeps a script a readable table rather than a program.</p>
+
+    <p>The human-in-the-loop gate broke it. When a <code>requireConfirmation</code> tool is denied, ADK does not skip the call: it returns it refused, as a function response carrying an <code>error</code>. That response counts as a completed round exactly like a successful one, so approval and denial land on <strong>the same script position</strong>.</p>
+
+    <div class="card bad">
+      <div class="card-head"><span class="card-num">SHIPPED, BRIEFLY</span><span class="card-name">A denied refund reported itself as applied</span></div>
+      <p>One text turn, reached either way, saying <em>"Refund of $129.99 approved and applied"</em>. Every other assertion passed: the tool genuinely had not run, the tool result genuinely carried the refusal, the thread genuinely reached a terminal status. Only the sentence the user reads was wrong &mdash; which is the only part most people would have checked.</p>
+    </div>
+
+    <p>So a <code>text</code> turn may carry <code>rejectedText</code>, used when the most recent response for one of the branch's own tools came back an error:</p>
+
+    <pre><code>{
+  kind: 'text',
+  text: 'Refund of $129.99 approved and applied to order A-1001...',
+  rejectedText: 'No problem, I have not applied the refund on order A-1001...',
+}</code></pre>
+
+    <p><strong>Deliberately the narrowest version of this.</strong> Not "branch on the result", which is a rules engine wearing a model's clothes &mdash; just <em>was the last result an error, or not</em>. A real model reads the refusal payload and writes its own sentence; a fake has to be told there is a second sentence to write.</p>
+
+    <div class="note warn">
+      <span class="note-label">Fixed in one path, not the other</span>
+      <p>The first fix resolved the text at the top of the <code>text</code> case and used it in the non-streaming branch. The streaming branch below still chunked <code>turn.text</code> &mdash; so the streamed answer, <em>the one the app actually uses</em>, was still wrong while the unit path was right.</p>
+      <p>The test now runs both modes with <code>it.each([false, true])</code>. A fake that is only correct when nobody is watching it stream is not a fake worth having.</p>
+    </div>
+
     <h2>Trace these yourself</h2>
     <ol class="subtle">
       <li>A turn requests three tool calls at once. By how much does the script advance when their responses come back?</li>
