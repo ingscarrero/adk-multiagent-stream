@@ -232,10 +232,12 @@ restore depends on what a thread costs. That is not a constant &mdash; it falls
 out of the agent's shape:
 
 ```
-events = 5 + 4T + ceil(W / 3)
+events = 5 + 4T + ceil(W / 3)      per TURN, not per thread
 
   5          thread.created, running, streaming, message.complete, and the
-             terminal status: every thread pays these
+             closing status: every turn pays these. A follow-up turn pays
+             4 of them -- there is no second thread.created, and it opens
+             with a message.user instead
   4 per tool call.call, awaiting_tool, tool.result, running
   W / 3      one message.delta per three words (ScriptedLlm's wordsPerChunk)
 ```
@@ -262,6 +264,13 @@ So the retained window is somewhere between roughly `buffer / 40` and
 
 (Measured with the order-tracking prompt throughout. A mixed session retains
 more threads, because most cost fewer than 23 events.)
+
+**A thread with follow-ups costs more than one turn.** The window is counted in
+events, so a conversation of three turns occupies roughly three threads' worth
+of it. That makes the readable window shorter in threads than the table above
+suggests for anyone who actually holds a conversation &mdash; which is another
+way of saying [L16](LIMITATIONS.md#l16) got slightly worse when threads learned
+to continue.
 
 ### What changes with real Gemini
 

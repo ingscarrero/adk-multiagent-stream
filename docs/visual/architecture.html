@@ -362,6 +362,60 @@ eventStream memory          true      true        Redis Streams, Kafka, NATS Jet
   </section>
 
   <section>
+    <h2>A thread is a conversation, not a run</h2>
+    <p class="lede">The architectural consequence of letting a thread take a second message, which turned out to be one idea rather than two features.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 300" role="img" aria-label="Three endpoints converging on one operation. Post to threads carries an opening prompt, post to threads id messages carries follow-up text, and post to threads id respond carries a function response quoting ADK's interrupt id. All three call runAsync against the same ADK session, whose accumulated history is what makes a follow-up answerable and a paused tool call resumable. Every consequence leaves on the SSE stream.">
+          <defs><marker id="ar-mt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="16" width="290" height="58" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="38" font-size="11.5" class="s-mono">POST /api/threads</text>
+          <text x="16" y="58" font-size="10.5" class="s-sub">the opening prompt</text>
+
+          <rect x="0" y="94" width="290" height="58" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="16" y="116" font-size="11.5" class="s-mono">POST /api/threads/:id/messages</text>
+          <text x="16" y="136" font-size="10.5" class="s-sub">follow-up text &mdash; from complete or cancelled</text>
+
+          <rect x="0" y="172" width="290" height="58" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="16" y="194" font-size="11.5" class="s-mono">POST /api/threads/:id/respond</text>
+          <text x="16" y="214" font-size="10.5" class="s-sub">a functionResponse &mdash; from awaiting_input</text>
+
+          <path d="M290 45 L344 45 L344 118" class="s-line" stroke-width="1.5" marker-end="url(#ar-mt)"/>
+          <path d="M290 123 L348 123" class="s-line" stroke-width="1.5" marker-end="url(#ar-mt)"/>
+          <path d="M290 201 L344 201 L344 128" class="s-line" stroke-width="1.5" marker-end="url(#ar-mt)"/>
+
+          <rect x="352" y="94" width="250" height="58" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="368" y="116" font-size="11.5" class="s-ok-text">runAsync(sessionId, newMessage)</text>
+          <text x="368" y="136" font-size="10.5" class="s-sub">one method, three callers</text>
+
+          <line x1="602" y1="123" x2="646" y2="123" class="s-line" stroke-width="1.5" marker-end="url(#ar-mt)"/>
+
+          <rect x="650" y="82" width="250" height="82" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="666" y="106" font-size="11.5" class="s-title">the ADK session</text>
+          <text x="666" y="126" font-size="10.5" class="s-sub">accumulated history &mdash; what makes</text>
+          <text x="666" y="142" font-size="10.5" class="s-sub">a follow-up answerable and a paused</text>
+          <text x="666" y="158" font-size="10.5" class="s-sub">tool call resumable</text>
+
+          <text x="0" y="266" font-size="11" class="s-sub">Every response is 202. Nothing useful comes back on the request &mdash; the whole turn arrives on the stream.</text>
+        </svg>
+      </div>
+      <figcaption>Three entry points, one operation. The differences are all in <code>newMessage</code>; the session is what carries everything between turns.</figcaption>
+    </figure>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-name">Terminal ends a turn, not a thread</span></div>
+      <p>Letting a finished thread re-open forced a distinction the code had been eliding. <code>complete</code> and <code>cancelled</code> each gained exactly one outgoing edge, back to <code>running</code>. <code>error</code> gained none: a failed run left an unknown amount of work half applied, and continuing on top of it is worse than starting again.</p>
+      <p>So <code>isTerminal</code> and <code>canAcceptFollowUp</code> now disagree, on exactly one status. That is not redundancy &mdash; it is the difference between <em>this run is over</em> and <em>this conversation is over</em>, which used to be the same sentence.</p>
+    </div>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-name">And a turn may end without the thread ending</span></div>
+      <p>A run gated on <code>requireConfirmation</code> stops without finishing. Closing it out as <code>complete</code> would be false, and would leave it unanswerable &mdash; so <code>awaiting_input</code> is the one non-terminal state a turn may settle in.</p>
+      <p>It is reachable only alongside a <code>thread.input_required</code> event naming what would unblock it, because <strong>a pause nobody can answer is a hang.</strong> The status says stop showing a spinner; the event says what to render instead and what to send back.</p>
+    </div>
+
     <h2>What survives a change of substrate</h2>
     <p class="lede">The useful question about any of this is: <em>if I swapped that for the real thing, would the code around it change?</em> Where the answer is no, the mechanism is sound and the emulation is genuinely just a stand-in.</p>
 

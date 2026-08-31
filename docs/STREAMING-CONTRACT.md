@@ -140,7 +140,13 @@ has to be a single session-wide sequence. One counter cannot do both jobs.
        └──────────┤ awaiting_input │
                   └────────────────┘
 
-  any non-terminal ──► complete | error | cancelled   (terminal, no exits)
+  any non-terminal ──► complete | error | cancelled   (ends the turn)
+
+  complete ──┐
+             ├──► running        a follow-up re-opens the conversation
+  cancelled ─┘
+
+  error ─────► (nothing)         a failed run is not continued
 ```
 
 The table lives in [`packages/protocol/src/status.ts`](../packages/protocol/src/status.ts)

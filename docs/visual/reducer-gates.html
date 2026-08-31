@@ -553,10 +553,16 @@
           <tr><td class="mono">message.complete</td><td>text <em>replaced</em> wholesale, <code>streaming</code> set false</td></tr>
           <tr><td class="mono">tool.call</td><td>tool recorded as <code>pending</code></td></tr>
           <tr><td class="mono">tool.result</td><td>tool becomes <code>done</code>, original <code>args</code> retained</td></tr>
+          <tr><td class="mono">message.user</td><td>a follow-up is appended to <code>timeline</code> directly, carrying its own text</td></tr>
+          <tr><td class="mono">thread.input_required</td><td><code>inputRequest</code> is set &mdash; what the thread is blocked on, and what would unblock it</td></tr>
           <tr><td class="mono">thread.created</td><td>nothing &mdash; the thread was already built by <code>createThread</code></td></tr>
         </tbody>
       </table>
     </div>
+    <p><code>message.user</code> is the one timeline entry carried <em>inline</em> rather than by reference. A message and a tool are both updated by later events, so the timeline holds an id and the payload lives in a map. A follow-up is never updated after it arrives &mdash; there is no second event to correlate with &mdash; so its position <em>is</em> its identity.</p>
+
+    <p><code>thread.input_required</code> is the only event that sets state the <em>status</em> then clears. Leaving <code>awaiting_input</code> removes <code>inputRequest</code>, keyed off the status rather than off the answer landing, because the status is what gets replayed on reconnect. A control that outlived its request would let someone approve the same action twice.</p>
+
     <p>A message or tool seen for the first time also gets appended to <code>timeline</code>, which is what fixes its position in the rendered thread. Applying is the only outcome that then runs the drain.</p>
 
     <h3>Buffered &mdash; deferred, not rejected</h3>

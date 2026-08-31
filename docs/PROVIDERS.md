@@ -77,6 +77,12 @@ running its children concurrently.
 |---|---|---|---|---|
 | **LLM inference** | Gemini, Vertex AI, any ADK `BaseLlm` | `ScriptedLlm` — deterministic, in-process | `MODEL_MODE` | `packages/agents/src/model.ts` |
 | **Agent sessions** | Postgres/MySQL via ADK `DatabaseSessionService`; `VertexAiSessionService` | ADK `InMemorySessionService` | `PROVIDER_SESSIONS` | `packages/providers/src/sessions` |
+
+The sessions row carries more weight than it used to. A follow-up turn is
+answered from conversation history, and a paused tool call is resumed by ADK
+finding the confirmation in that same history — so with the memory adapter, a
+restart does not just lose the transcript, it loses the agent's *context*. Two
+features now depend on that provider rather than one docs page mentioning it.
 | **Knowledge retrieval** | Vector DB — pgvector, Vertex AI Search, Pinecone; ADK ships `VertexAiRagRetrievalTool` | keyword match over 3 fixture articles | `PROVIDER_KNOWLEDGE` | `packages/providers/src/knowledge` |
 | **Embeddings** | Gemini `text-embedding-*` | deterministic hashed vectors | `PROVIDER_EMBEDDINGS` | `packages/providers/src/knowledge` |
 | **Event stream** — storage, retention, replay and delivery | Redis Streams, Kafka, NATS JetStream | bounded in-process array plus a set of listeners | `PROVIDER_EVENTSTREAM` | `packages/providers/src/eventstream` |

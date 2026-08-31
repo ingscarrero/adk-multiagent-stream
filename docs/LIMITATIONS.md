@@ -440,7 +440,7 @@ but a shared store still has to be written before any of it survives a restart.
 
 After a replay-buffer overrun, a reload rebuilds *all* of them, but only the
 tail of the session has content left to restore. The buffer holds events, not
-threads, and a thread costs `5 + 4T + ceil(W / 3)` events — five fixed, four per
+threads, and a *turn* costs `5 + 4T + ceil(W / 3)` events — five fixed, four per
 tool round trip, one delta per three words. That is 10 for a no-tool answer, 23
 for the order-tracking prompt, 40 for the research pipeline. The readable window
 is therefore roughly 12 to 50 threads at the default 500, and one or two on the
