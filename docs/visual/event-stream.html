@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Log Underneath</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>The Log Underneath</h1>
+    <p class="standfirst">The append-only log that the feed is built on: which parts of stream systems it actually uses, how the in-process adapter works, and what the Redis one will and will not fix.</p>
+    <span class="filepath">packages/providers/src/eventstream</span>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+  </header>
+
+
+  <section>
+    <h2>One idea, borrowed</h2>
+    <p class="lede">Under the feed is the oldest idea in streaming infrastructure: an <strong>append-only log</strong>. Records go on the end, never in the middle. Each gets a position. Nothing is ever mutated. Readers are not sent anything &mdash; they hold a position and ask for what comes after it.</p>
+
+    <p>Kafka is that, durably and partitioned. Redis Streams is that, in memory with optional persistence. A database's write-ahead log is that. This repo is that, in an array. The array is a bad implementation of the idea, but it is genuinely the same idea, and that is what makes the substitution possible rather than a rewrite.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 300" role="img" aria-label="An append-only log: a producer appends entries at increasing offsets, a retention window discards the oldest, and two consumers sit at different positions - one caught up on the live tail, one still replaying the backlog.">
+          <defs><marker id="lg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <text x="0" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">THE LOG, ONE SESSION</text>
+
+          <rect x="0" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="38" y="52" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--ink-3)">1</text>
+          <text x="38" y="66" text-anchor="middle" font-size="9" class="s-sub">gone</text>
+          <rect x="80" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="118" y="52" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--ink-3)">2</text>
+          <text x="118" y="66" text-anchor="middle" font-size="9" class="s-sub">gone</text>
+
+          <rect x="164" y="30" width="76" height="44" rx="6" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="202" y="58" text-anchor="middle" font-size="12" class="s-mono" style="fill: var(--warn)">3</text>
+          <rect x="244" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="282" y="58" text-anchor="middle" font-size="12" class="s-mono">4</text>
+          <rect x="324" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="362" y="58" text-anchor="middle" font-size="12" class="s-mono">5</text>
+          <rect x="404" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="442" y="58" text-anchor="middle" font-size="12" class="s-mono">6</text>
+          <rect x="484" y="30" width="76" height="44" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="522" y="58" text-anchor="middle" font-size="12" class="s-mono">7</text>
+          <rect x="564" y="30" width="76" height="44" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="602" y="58" text-anchor="middle" font-size="12" class="s-mono" style="fill: var(--ok)">8</text>
+
+          <rect x="660" y="30" width="120" height="44" rx="6" class="s-accent-fill" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="720" y="58" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--accent)">append &rarr;</text>
+
+          <line x1="164" y1="88" x2="640" y2="88" class="s-line" stroke-width="1.5"/>
+          <text x="164" y="106" font-size="10.5" class="s-warn-text" style="fill: var(--warn)">retention window: oldestOffset = 3</text>
+          <text x="470" y="106" font-size="10.5" class="s-sub">everything before it is unrecoverable</text>
+
+          <line x1="202" y1="150" x2="202" y2="80" class="s-line" stroke-width="1.5" marker-end="url(#lg)"/>
+          <rect x="120" y="152" width="220" height="52" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="138" y="174" font-size="11.5" class="s-title">consumer A</text>
+          <text x="138" y="192" font-size="10.5" class="s-sub">reconnected, replaying the backlog</text>
+
+          <line x1="602" y1="150" x2="602" y2="80" class="s-line" stroke-width="1.5" marker-end="url(#lg)"/>
+          <rect x="500" y="152" width="220" height="52" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="518" y="174" font-size="11.5" class="s-ok-text">consumer B</text>
+          <text x="518" y="192" font-size="10.5" class="s-sub">caught up, following the live tail</text>
+
+          <text x="0" y="242" font-size="11" class="s-sub">The log does not push. Each consumer holds a position and asks for what follows,</text>
+          <text x="0" y="260" font-size="11" class="s-sub">which is why two of them can be in completely different places without coordinating,</text>
+          <text x="0" y="278" font-size="11" class="s-sub">and why a consumer that falls behind the window can be told rather than silently starved.</text>
+        </svg>
+      </div>
+      <figcaption>Everything the feed does with reconnection, replay and recovery is this picture. The interesting engineering is not the log; it is what the consumer does when its position falls off the left edge.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Which parts of stream systems this actually uses</h2>
+    <p class="lede">Stream platforms carry a lot of machinery. Most of it is irrelevant here, and saying which is which is more useful than listing features.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Concept</th><th>Used here?</th><th>How it lands</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Append-only log</strong></td><td><span class="chip chip--ok">core</span></td><td>one log per browser session</td></tr>
+          <tr><td><strong>Offsets</strong></td><td><span class="chip chip--ok">core</span></td><td>the SSE <code>id:</code> field, echoed back as <code>Last-Event-ID</code></td></tr>
+          <tr><td><strong>Retention window</strong></td><td><span class="chip chip--ok">core</span></td><td><code>EVENT_RETENTION</code>; falling off it is what triggers a resync</td></tr>
+          <tr><td><strong>Replay then tail</strong></td><td><span class="chip chip--ok">core</span></td><td>a single <code>open</code> call, backlog then live</td></tr>
+          <tr><td><strong>Idempotent consumer</strong></td><td><span class="chip chip--ok">core</span></td><td>the reducer drops any <code>seq</code> it has already applied</td></tr>
+          <tr><td><strong>Partitioning</strong></td><td><span class="chip chip--warn">implicit</span></td><td>session <em>is</em> the partition key; ordering is guaranteed within one and undefined across</td></tr>
+          <tr><td><strong>Broadcast delivery</strong></td><td><span class="chip chip--warn">trivial</span></td><td>every subscriber gets everything &mdash; several tabs of one session</td></tr>
+          <tr><td>Consumer groups</td><td><span class="chip chip--bad">no</span></td><td>no competing consumers; nobody is dividing work</td></tr>
+          <tr><td>Exactly-once</td><td><span class="chip chip--bad">no</span></td><td>at-least-once plus an idempotent consumer, which is the achievable version</td></tr>
+          <tr><td>Log compaction</td><td><span class="chip chip--bad">no</span></td><td>no keyed state to collapse; the transcript is the value</td></tr>
+          <tr><td>Backpressure</td><td><span class="chip chip--bad">no</span></td><td>a slow subscriber is buffered without bound (L2)</td></tr>
+          <tr><td>Durability</td><td><span class="chip chip--bad">no</span></td><td>an array in one process; a restart loses everything</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="note-label">The one worth saying out loud</span>
+      <p>Delivery here is <strong>at-least-once</strong>, not exactly-once, and that is a choice rather than a shortfall. SSE reconnection replays from <code>Last-Event-ID</code>, so overlap is normal. Exactly-once over an unreliable transport is a much larger promise than it sounds; making the <em>consumer</em> idempotent is the cheap, robust version, and the reducer's already-applied gate is precisely that.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Two counters on one log</h2>
+    <p class="lede">The single most misunderstood part of this design, and it is a direct consequence of choosing one log per session rather than one per thread.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 260" role="img" aria-label="One session log carries entries from two threads. The offset column increases across the whole log, while each thread's seq increases only within that thread, so both threads independently count from one.">
+          <text x="0" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">SESSION LOG</text>
+          <rect x="0" y="26" width="560" height="196" rx="8" class="s-box" stroke-width="1.5"/>
+
+          <text x="20" y="50" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">OFFSET</text>
+          <text x="110" y="50" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">THREAD</text>
+          <text x="230" y="50" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">SEQ</text>
+          <line x1="20" y1="58" x2="540" y2="58" class="s-rule" stroke-width="1"/>
+
+          <text x="20" y="80" font-size="12" class="s-mono">41</text>
+          <text x="110" y="80" font-size="12" class="s-mono" style="fill: var(--accent)">A</text>
+          <text x="230" y="80" font-size="12" class="s-mono" style="fill: var(--accent)">7</text>
+          <text x="20" y="106" font-size="12" class="s-mono">42</text>
+          <text x="110" y="106" font-size="12" class="s-mono" style="fill: var(--warn)">B</text>
+          <text x="230" y="106" font-size="12" class="s-mono" style="fill: var(--warn)">1</text>
+          <text x="20" y="132" font-size="12" class="s-mono">43</text>
+          <text x="110" y="132" font-size="12" class="s-mono" style="fill: var(--accent)">A</text>
+          <text x="230" y="132" font-size="12" class="s-mono" style="fill: var(--accent)">8</text>
+          <text x="20" y="158" font-size="12" class="s-mono">44</text>
+          <text x="110" y="158" font-size="12" class="s-mono" style="fill: var(--warn)">B</text>
+          <text x="230" y="158" font-size="12" class="s-mono" style="fill: var(--warn)">2</text>
+          <text x="20" y="184" font-size="12" class="s-mono">45</text>
+          <text x="110" y="184" font-size="12" class="s-mono" style="fill: var(--warn)">B</text>
+          <text x="230" y="184" font-size="12" class="s-mono" style="fill: var(--warn)">3</text>
+
+          <text x="330" y="80" font-size="10.5" class="s-sub">dense across</text>
+          <text x="330" y="94" font-size="10.5" class="s-sub">the whole log</text>
+          <text x="330" y="140" font-size="10.5" class="s-sub">dense within</text>
+          <text x="330" y="154" font-size="10.5" class="s-sub">each thread</text>
+
+          <rect x="590" y="26" width="310" height="90" rx="8" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="608" y="50" font-size="12" class="s-accent-text">offset &mdash; the log's</text>
+          <text x="608" y="72" font-size="10.5" class="s-sub">assigned by the stream. Drives</text>
+          <text x="608" y="88" font-size="10.5" class="s-sub">Last-Event-ID and retention.</text>
+          <text x="608" y="106" font-size="10.5" class="s-sub">Meaningless to the UI.</text>
+
+          <rect x="590" y="132" width="310" height="90" rx="8" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="608" y="156" font-size="12" class="s-ok-text">seq &mdash; the domain's</text>
+          <text x="608" y="178" font-size="10.5" class="s-sub">assigned by ThreadRunner. Drives</text>
+          <text x="608" y="194" font-size="10.5" class="s-sub">ordering, gaps and dedup.</text>
+          <text x="608" y="212" font-size="10.5" class="s-sub">Meaningless to the transport.</text>
+        </svg>
+      </div>
+      <figcaption>Both threads count <code>seq</code> from 1 and that is correct: ordering is only defined <em>within</em> a thread. "Thread A's token 7 came before thread B's token 1" is a fact about the transport, not about the conversation.</figcaption>
+    </figure>
+
+    <p>Stream platforms make the same split. Kafka gives you a partition offset; whatever ordering your domain needs inside that partition is yours to carry. Putting each thread on its own partition would collapse the two counters into one &mdash; and cost a connection per thread, which is the thing the multiplexed design exists to avoid.</p>
+  </section>
+
+  <section>
+    <h2>How it is implemented today</h2>
+    <p class="lede">One port, one adapter. The port is the whole surface a stream has to present for this feed to work.</p>
+
+    <pre><code>interface EventStream {
+  append(sessionId, event): Promise&lt;StreamEntry&gt;;
+  open(sessionId, afterOffset, onEntry): Promise&lt;StreamSubscription&gt;;
+  close(): Promise&lt;void&gt;;
+}
+
+interface StreamSubscription {
+  replay: StreamEntry[];   <span class="cmt">// the backlog, for the caller to write</span>
+  oldestOffset: number;    <span class="cmt">// what overrun detection reads</span>
+  flush(): void;           <span class="cmt">// release entries held during open</span>
+  close(): Promise&lt;void&gt;;
+}</code></pre>
+
+    <h3>The memory adapter</h3>
+    <p>An array and a <code>Set</code> of listeners per session. <code>append</code> pushes, assigns <code>nextOffset++</code>, splices the array down to the retention limit, then calls every listener. <code>oldestOffset</code> is <code>entries[0].offset</code>, or the next offset when the log is empty.</p>
+    <p>It is correct for one process and cannot work across instances: another instance holds a different array, so a client that reconnects there finds nothing to replay. That is the entire reason a real adapter is worth building.</p>
+
+    <h3>Why open and flush are one operation</h3>
+    <p>A subscriber needs the backlog <em>and</em> everything after it, with nothing lost in between. Calling <code>replay()</code> and then <code>subscribe()</code> drops whatever is appended between the two &mdash; a race that is rare, silent, and produces exactly the kind of gap the reducer then stalls on.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 210" role="img" aria-label="Timeline: open registers the listener and snapshots the backlog together; entries appended while the caller writes the backlog are held, then released in order by flush.">
+          <defs><marker id="tl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <line x1="0" y1="120" x2="880" y2="120" class="s-line" stroke-width="1.5" marker-end="url(#tl)"/>
+
+          <line x1="120" y1="60" x2="120" y2="130" class="s-line" stroke-width="1.5"/>
+          <rect x="30" y="24" width="180" height="34" rx="6" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="120" y="46" text-anchor="middle" font-size="11.5" class="s-mono" style="fill: var(--accent)">open()</text>
+          <text x="30" y="146" font-size="10.5" class="s-sub">listener registered AND</text>
+          <text x="30" y="162" font-size="10.5" class="s-sub">backlog snapshotted, together</text>
+
+          <line x1="420" y1="60" x2="420" y2="130" class="s-dash" stroke-width="1.5"/>
+          <rect x="300" y="24" width="240" height="34" rx="6" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="420" y="46" text-anchor="middle" font-size="11.5" class="s-warn-text">append lands here</text>
+          <text x="300" y="146" font-size="10.5" class="s-warn-text" style="fill: var(--warn)">held, not dropped and not</text>
+          <text x="300" y="162" font-size="10.5" class="s-sub">delivered out of order</text>
+
+          <line x1="700" y1="60" x2="700" y2="130" class="s-line" stroke-width="1.5"/>
+          <rect x="610" y="24" width="180" height="34" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="700" y="46" text-anchor="middle" font-size="11.5" class="s-ok-text">flush()</text>
+          <text x="610" y="146" font-size="10.5" class="s-sub">held entries released,</text>
+          <text x="610" y="162" font-size="10.5" class="s-sub">after the backlog is written</text>
+
+          <text x="0" y="196" font-size="11" class="s-sub">replay() then subscribe() as two calls would lose the middle entry entirely.</text>
+        </svg>
+      </div>
+      <figcaption>Asserted directly by the contract suite: <em>"loses nothing appended between open and flush"</em>. Any adapter of this port has to pass it.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>How the real adapter is planned</h2>
+    <p class="lede">Redis Streams first, because it provides the whole port from one data structure and needs no schema. The mapping is close to one-to-one.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Port operation</th><th>Redis Streams</th><th>Kafka equivalent</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">append</td><td class="mono">XADD key MAXLEN ~ N * ...</td><td>produce to a topic</td></tr>
+          <tr><td class="mono">open &rarr; replay</td><td class="mono">XRANGE key (from +</td><td>seek to offset, then poll</td></tr>
+          <tr><td class="mono">open &rarr; live</td><td class="mono">XREAD BLOCK 0 STREAMS key id</td><td>consume from the tail</td></tr>
+          <tr><td class="mono">oldestOffset</td><td class="mono">XINFO STREAM key &rarr; first-entry</td><td>beginning offset of the partition</td></tr>
+          <tr><td>retention</td><td class="mono">MAXLEN ~ N</td><td>retention.ms / retention.bytes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <span class="note-label">The one real obstacle</span>
+      <p>Redis stream IDs are <code>&lt;millis&gt;-&lt;seq&gt;</code>, not integers. This port's <code>offset</code> is a number, and that is not cosmetic: it becomes the SSE <code>id:</code> field, the browser echoes it as <code>Last-Event-ID</code>, and the resync notice does arithmetic on it &mdash; the client resumes at <code>from - 1</code>.</p>
+      <p>Two ways out. Keep integers by holding a per-session <code>INCR</code> counter alongside the stream and storing the offset as a field on each entry &mdash; one extra round trip on append, and everything above stays untouched. Or widen <code>offset</code> to an opaque cursor and replace <code>from - 1</code> with "the entry before this one", which Redis can answer with <code>XREVRANGE</code> but which spreads through the protocol, the reducer and the client.</p>
+      <p>The plan is the counter. The arithmetic on offsets is load-bearing in three places, and an opaque cursor would buy nothing except fidelity to Redis's own ID format. Kafka, incidentally, has integer offsets per partition and would need none of this.</p>
+    </div>
+
+    <h3>What changes, and what does not</h3>
+    <p><code>SessionHub</code> does not change at all &mdash; it already cannot tell what is behind the port. Neither does the reducer, the protocol, the recovery flow, or any browser test. What changes is one adapter file and a config flag, which is the claim the port was built to make good on.</p>
+
+    <h3>What Redis still does not fix</h3>
+    <p>A shared stream makes multi-instance possible and survives a restart, and it does <em>not</em> give the feed a message store. The stream would still be a bounded window, so a rolled-out transcript is still unrecoverable and a thread can still come back saying its messages are gone. In production the stream is a fast tail in front of a durable store; here it would still be doing both jobs. That is a separate decision, recorded as L7.</p>
+    <p>Backpressure is untouched too: a slow subscriber is still buffered without bound (L2). Redis makes that <em>more</em> pressing, not less, because a stalled consumer now holds a connection to shared infrastructure.</p>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>Why is ordering guaranteed within a session but undefined across sessions? What would it cost to guarantee it globally?</li>
+      <li>A consumer's <code>Last-Event-ID</code> is below <code>oldestOffset</code>. What does the log owe it, and what can it not provide?</li>
+      <li>Why is at-least-once delivery with an idempotent consumer a better target here than exactly-once?</li>
+      <li>If each thread had its own log instead of each session, which problem goes away and which appears?</li>
+    </ol>
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> One log per session, and a log is only ordered within itself. Global ordering would mean a single log for every user, which serialises unrelated work and makes retention a shared resource &mdash; the classic reason to partition. <strong>2.</strong> It owes it the truth: a <code>resync</code> naming the oldest offset it still holds. It cannot provide the missing prefix, because retention already discarded it. <strong>3.</strong> Exactly-once over a transport that can drop a connection mid-frame is a very large promise; making the consumer idempotent achieves the same observable result for the cost of one comparison, which is the reducer's already-applied gate. <strong>4.</strong> The two counters collapse into one, since offset and seq would be the same number. In exchange you need a connection or a subscription per thread, which is the browser six-connection problem the multiplexed design exists to avoid.</p>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

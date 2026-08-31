@@ -40,7 +40,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 |---|---|
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 206 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test` | 217 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
 | `pnpm test:e2e` | 63 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
@@ -71,7 +71,7 @@ Index and conventions in **[docs/](docs/README.md)**.
 | **[docs/TESTING.md](docs/TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
 | **[docs/PROVIDERS.md](docs/PROVIDERS.md)** | Emulated versus real: what stands in for Kafka, a vector DB, a session store, an identity provider — and where each seam is. |
-| **[docs/visual/](docs/README.md)** | Six illustrated deep-dives: the architecture and substrate boundary, then the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
+| **[docs/visual/](docs/README.md)** | Seven illustrated deep-dives: the architecture and substrate boundary, the event log the feed is built on, then the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
 
 Every source file opens with a docblock explaining what it owns and why it is
 shaped that way. The interesting reasoning is next to the code, not here.

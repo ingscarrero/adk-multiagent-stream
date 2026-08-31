@@ -280,11 +280,10 @@ something" was indistinguishable from noise.
 ### L16 — A resynced feed can be mostly empty threads {#l16}
 
 **Where** — `ThreadRunner.summaries` returns every thread the session has ever
-had, and the server never forgets one ([L3](#l3)). The replay buffer that limits
-what can be restored is still hard-wired in `SessionHub`: `eventLog` and
-`fanout` are catalogued in [PROVIDERS.md](PROVIDERS.md) with
-`switchable: false`, because splitting buffering from delivery is surgery on the
-code [L1](#l1) lived in and lands on its own.
+had, and the server never forgets one ([L3](#l3)). The replay window that limits what
+can be restored is now the `eventStream` provider ([PROVIDERS.md](PROVIDERS.md)),
+so retention is `EVENT_RETENTION` rather than a constant inside `SessionHub` —
+but a shared store still has to be written before any of it survives a restart.
 
 After a replay-buffer overrun, a reload rebuilds *all* of them, but only the
 tail of the session has content left to restore. The buffer holds events, not

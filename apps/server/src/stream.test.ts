@@ -23,7 +23,6 @@ beforeEach(async () => {
     config: {
       ...loadConfig({ MODEL_MODE: 'scripted' }),
       heartbeatMs: 0,
-      replayBufferSize: 200,
     },
     // Zero chunk delay: these tests assert on order and content, never timing.
     runnerOptions: { chunkDelayMs: 0 },
@@ -311,7 +310,7 @@ describe('cancellation', () => {
     // A separate app with a slow model, so the cancel lands mid-stream rather
     // than after the run has already finished.
     const slow = createApp({
-      config: { ...loadConfig({ MODEL_MODE: 'scripted' }), heartbeatMs: 0, replayBufferSize: 200 },
+      config: { ...loadConfig({ MODEL_MODE: 'scripted' }), heartbeatMs: 0 },
       runnerOptions: { chunkDelayMs: 40 },
     });
     const slowServer = await new Promise<Server>((resolve) => {
@@ -368,12 +367,15 @@ describe('replay-buffer overrun (L1)', () => {
    * because the default 500-event buffer is never reached in normal use. These
    * force it with a deliberately tiny buffer.
    */
-  async function tinyBufferApp(replayBufferSize: number) {
+  async function tinyBufferApp(retention: number) {
+    const base = loadConfig({ MODEL_MODE: 'scripted' });
     const app = createApp({
       config: {
-        ...loadConfig({ MODEL_MODE: 'scripted' }),
+        ...base,
         heartbeatMs: 0,
-        replayBufferSize,
+        // Retention belongs to the event stream provider now, so a tiny buffer
+        // is configured there rather than on the server config.
+        providers: { ...base.providers, eventRetention: retention },
       },
       runnerOptions: { chunkDelayMs: 0 },
     });

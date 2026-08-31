@@ -184,7 +184,7 @@
     <h1>The Substrate Line</h1>
     <p class="standfirst">The whole system in one diagram, the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for.</p>
     <span class="filepath">docs/ARCHITECTURE.md &middot; docs/PROVIDERS.md</span>
-    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+    <p class="siblings">Also in this set: <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
   </header>
 
 
@@ -226,10 +226,10 @@
           <text x="32" y="224" font-size="10" class="s-sub">identity port</text>
           <text x="32" y="240" font-size="10" class="s-sub">health matrix</text>
 
-          <rect x="234" y="184" width="220" height="68" rx="7" class="s-warn-fill" stroke-width="1.5"/>
-          <text x="248" y="206" font-size="11" class="s-warn-text">SessionHub</text>
-          <text x="248" y="224" font-size="10" class="s-sub">buffer + offsets + fan-out</text>
-          <text x="248" y="240" font-size="10" class="s-warn-text">no port yet</text>
+          <rect x="234" y="184" width="220" height="68" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="248" y="206" font-size="11" class="s-mono">SessionHub</text>
+          <text x="248" y="224" font-size="10" class="s-sub">SSE framing, resync, heartbeat</text>
+          <text x="248" y="240" font-size="10" class="s-sub">eventStream port</text>
 
           <rect x="470" y="184" width="200" height="68" rx="7" class="s-box" stroke-width="1"/>
           <text x="484" y="206" font-size="11" class="s-mono">ThreadRunner</text>
@@ -255,7 +255,7 @@
           <!-- providers -->
           <rect x="0" y="302" width="420" height="72" rx="8" class="s-ok-fill" stroke-width="1.5"/>
           <text x="18" y="326" font-size="12.5" class="s-ok-text">packages/providers</text>
-          <text x="18" y="348" font-size="11" class="s-mono">sessions &middot; knowledge &middot; identity</text>
+          <text x="18" y="348" font-size="11" class="s-mono">sessions &middot; knowledge &middot; identity &middot; eventStream</text>
           <text x="18" y="366" font-size="10.5" class="s-sub">ports + emulated adapters</text>
 
           <line x1="210" y1="270" x2="210" y2="298" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
@@ -269,10 +269,8 @@
           <text x="90" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">session store</text>
           <rect x="192" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
           <text x="282" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">vector search</text>
-          <rect x="384" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
-          <text x="474" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">event log</text>
-          <rect x="576" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
-          <text x="666" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">pub/sub</text>
+          <rect x="384" y="432" width="372" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="570" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">event stream (log + delivery)</text>
           <rect x="768" y="432" width="172" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
           <text x="854" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">identity</text>
         </svg>
@@ -354,13 +352,12 @@ model       scripted        true      true        Gemini, Vertex AI, any ADK Bas
 sessions    memory          true      true        Postgres via ADK DatabaseSessionService
 knowledge   keyword         true      true        Vector search: pgvector, Vertex AI Search
 identity    trusted-header  true      true        OIDC / JWT
-eventLog    memory          true      <span class="cmt">false</span>       Redis Streams, Kafka, NATS JetStream
-fanout      inprocess       true      <span class="cmt">false</span>       Redis pub/sub, NATS</code></pre>
+eventStream memory          true      true        Redis Streams, Kafka, NATS JetStream</code></pre>
 
-    <div class="note warn">
-      <span class="note-label">switchable: false is not a typo</span>
-      <p><code>eventLog</code> and <code>fanout</code> have no port yet &mdash; they are still hard-wired inside <code>SessionHub</code>, which owns buffering, offset assignment, replay and delivery in one class. Splitting it is surgery on the code three recovery bugs already lived in, so it lands on its own with the recovery test project as the guard.</p>
-      <p>They are listed anyway. A catalogue that quietly omits what it has not done reads as complete, which is worse than admitting the gap.</p>
+    <div class="note">
+      <span class="note-label">Why storage and delivery are one row</span>
+      <p>They were two &mdash; <code>eventLog</code> and <code>fanout</code> &mdash; and that was wrong. Of the four combinations only two are coherent: an in-memory log with shared delivery is broken, because an instance that never held the events cannot replay them to a client that reconnects there; a shared log with in-process delivery works and buys nothing.</p>
+      <p>Every real provider serves both from one primitive &mdash; Redis Streams is <code>XADD</code> / <code>XRANGE</code> / <code>XREAD BLOCK</code> &mdash; so splitting them advertised a seam no implementation has. "Fan-out" was also already taken here: it means a <code>ParallelAgent</code> running its children concurrently. <a href="event-stream.html">The Log Underneath</a> covers the stream itself in depth.</p>
     </div>
   </section>
 
@@ -379,8 +376,8 @@ fanout      inprocess       true      <span class="cmt">false</span>       Redis
     </div>
 
     <div class="card bad">
-      <div class="card-head"><span class="card-name">Emulated, no seam yet</span></div>
-      <p>The event log and cross-instance fan-out. And one thing that is not emulated at all: <strong>there is no message store</strong>. The replay buffer is the only place agent messages exist, which is why a rolled-out transcript is unrecoverable and why a thread can come back saying its messages are gone. That is one architectural decision, not three loose ends.</p>
+      <div class="card-head"><span class="card-name">Not emulated &mdash; simply absent</span></div>
+      <p><strong>There is no message store.</strong> The event stream is the only place agent messages exist, which is why a rolled-out transcript is unrecoverable and why a thread can come back saying its messages are gone. In production the stream would be a fast tail in front of a durable store; here it is doing both jobs. That is one architectural decision, not three loose ends.</p>
     </div>
   </section>
 

@@ -39,9 +39,10 @@ export interface FeedApp {
 export function createApp(deps: AppDeps = {}): FeedApp {
   const config = deps.config ?? loadConfig();
   const providers = deps.providers ?? resolveProviders(config.providers);
-  const hubs = new HubRegistry({
+  // Retention lives on the stream provider now, not on the hub: it is a
+  // property of the log, and the real adapter needs it just as much.
+  const hubs = new HubRegistry(providers.eventStream, {
     heartbeatMs: config.heartbeatMs,
-    replayBufferSize: config.replayBufferSize,
     reconnectDelayMs: config.reconnectDelayMs,
   });
   const threads = new ThreadRunner({
@@ -76,9 +77,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
       sessions: providers.sessions.mode,
       knowledge: providers.knowledge.mode,
       identity: providers.identity.mode,
-      // No port yet; catalogued so the list is not misleadingly short.
-      eventLog: 'memory',
-      fanout: 'inprocess',
+      eventStream: providers.eventStream.mode,
     });
 
     res.json({
@@ -174,7 +173,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     const lastEventId =
       req.get('Last-Event-ID') ?? (typeof req.query['lastEventId'] === 'string' ? req.query['lastEventId'] : undefined);
 
-    const detach = hubs.get(sessionId).subscribe(res, lastEventId);
+    const detach = await hubs.get(sessionId).subscribe(res, lastEventId);
     // `close` fires for a client navigating away, a network drop, and an
     // aborted fetch alike — it is the only teardown hook that catches all three.
     req.on('close', detach);

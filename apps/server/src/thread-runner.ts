@@ -129,17 +129,21 @@ export class ThreadRunner {
     this.threads.set(thread.id, thread);
     this.sequences.set(thread.id, 0);
 
-    // seq 1 for every thread, always, and always before anything else.
-    this.emit(params.hub, thread.id, {
+    // seq 1 for every thread, always, and always before anything else. The
+    // run is chained onto it rather than started alongside, so the creation
+    // event cannot race the first event the agent produces.
+    const opened = this.emit(params.hub, thread.id, {
       type: 'thread.created',
       prompt: thread.prompt,
       agent: thread.agent,
     });
 
-    const run = this.run(thread, params.hub).finally(() => {
-      this.inFlight.delete(run);
-      this.aborts.delete(thread.id);
-    });
+    const run = opened
+      .then(() => this.run(thread, params.hub))
+      .finally(() => {
+        this.inFlight.delete(run);
+        this.aborts.delete(thread.id);
+      });
     this.inFlight.add(run);
 
     return thread;
@@ -160,15 +164,25 @@ export class ThreadRunner {
     }
   }
 
-  /** Stamps a draft with threadId/seq/ts, validates it, and publishes it. */
-  private emit(hub: SessionHub, threadId: string, draft: FeedEventDraft): FeedEvent {
+  /**
+   * Stamps a draft with threadId/seq/ts, validates it, and publishes it.
+   *
+   * `seq` is assigned synchronously, before the await, so ordering is fixed
+   * here and cannot depend on how fast the event stream accepts a write. The
+   * append is awaited because a remote stream must land entries in order.
+   */
+  private async emit(
+    hub: SessionHub,
+    threadId: string,
+    draft: FeedEventDraft,
+  ): Promise<FeedEvent> {
     const seq = (this.sequences.get(threadId) ?? 0) + 1;
     this.sequences.set(threadId, seq);
 
     // Validating on the way out means a protocol mistake fails in the server's
     // own tests rather than as a silently-dropped frame in the browser.
     const event = parseFeedEvent({ ...draft, threadId, seq, ts: Date.now() });
-    hub.publish(event);
+    await hub.publish(event);
     return event;
   }
 
@@ -177,9 +191,11 @@ export class ThreadRunner {
     this.aborts.set(thread.id, controller);
 
     const translator = new AdkEventTranslator('queued');
-    const publish = (drafts: FeedEventDraft[]) => {
+    const publish = async (drafts: FeedEventDraft[]) => {
+      // Sequentially: drafts from one translate() call are ordered, and a
+      // remote stream must receive them in that order.
       for (const draft of drafts) {
-        const event = this.emit(hub, thread.id, draft);
+        const event = await this.emit(hub, thread.id, draft);
         if (event.type === 'thread.status') {
           // The record's status and the translator's are stepped together, so
           // a divergence would be an immediate assertion failure.
@@ -191,7 +207,7 @@ export class ThreadRunner {
     let outcome: ThreadStatus = 'complete';
 
     try {
-      publish(translator.begin());
+      await publish(translator.begin());
 
       const runner = new Runner({
         appName: APP_NAME,
@@ -225,7 +241,7 @@ export class ThreadRunner {
         },
         abortSignal: controller.signal,
       })) {
-        publish(translator.translate(event));
+        await publish(translator.translate(event));
       }
 
       if (controller.signal.aborted) outcome = 'cancelled';
@@ -235,12 +251,12 @@ export class ThreadRunner {
         outcome = 'cancelled';
       } else {
         outcome = 'error';
-        publish(translator.fail(error instanceof Error ? error.message : String(error)));
+        await publish(translator.fail(error instanceof Error ? error.message : String(error)));
       }
     } finally {
       // The guarantee: whatever happened above, the thread reaches a terminal
       // status and any half-written message is closed out.
-      publish(translator.finish(outcome));
+      await publish(translator.finish(outcome));
     }
   }
 }

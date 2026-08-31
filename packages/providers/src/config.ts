@@ -12,15 +12,21 @@ import { CAPABILITIES } from './catalog.ts';
 export type SessionsMode = 'memory' | 'postgres';
 export type KnowledgeMode = 'keyword' | 'vector';
 export type IdentityMode = 'trusted-header' | 'jwt';
+export type EventStreamMode = 'memory' | 'redis';
 
 export interface ProviderConfig {
   sessions: SessionsMode;
   knowledge: KnowledgeMode;
   identity: IdentityMode;
+  eventStream: EventStreamMode;
+  /** Events retained per session. The window a reconnecting client can resume within. */
+  eventRetention: number;
   /** Required by `sessions=postgres` and `knowledge=vector`. */
   databaseUrl?: string;
   /** Required by `identity=jwt`. */
   jwtSecret?: string;
+  /** Required by `eventStream=redis`. */
+  redisUrl?: string;
 }
 
 function pick<T extends string>(
@@ -53,7 +59,13 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
     [CAPABILITIES.identity.emulated, ...CAPABILITIES.identity.real], 'trusted-header',
   );
 
+  const eventStream = pick<EventStreamMode>(
+    env, 'PROVIDER_EVENTSTREAM',
+    [CAPABILITIES.eventStream.emulated, ...CAPABILITIES.eventStream.real], 'memory',
+  );
+
   const databaseUrl = env['DATABASE_URL'];
+  const redisUrl = env['REDIS_URL'];
   const jwtSecret = env['JWT_SECRET'];
 
   // Fail at startup, naming the variable, rather than on first use.
@@ -65,12 +77,21 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
   if (identity === 'jwt' && !jwtSecret) {
     throw new Error('PROVIDER_IDENTITY=jwt requires JWT_SECRET. See docs/PROVIDERS.md.');
   }
+  if (eventStream === 'redis' && !redisUrl) {
+    throw new Error('PROVIDER_EVENTSTREAM=redis requires REDIS_URL. See docs/PROVIDERS.md.');
+  }
 
   return {
     sessions,
     knowledge,
     identity,
+    eventStream,
+    // Retention belongs to the stream, not to SSE: the real adapter needs it
+    // just as much. `SSE_REPLAY_BUFFER` is still honoured because it is the
+    // name the docs and the dev:recovery recipe already use.
+    eventRetention: Number(env['EVENT_RETENTION'] ?? env['SSE_REPLAY_BUFFER'] ?? 500),
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(jwtSecret ? { jwtSecret } : {}),
+    ...(redisUrl ? { redisUrl } : {}),
   };
 }
