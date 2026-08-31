@@ -43,9 +43,11 @@ export default defineConfig({
       // Recovery needs a server with a small replay buffer; it has its own project.
       testIgnore: /recovery\.spec\.ts/,
     },
-    // Firefox and WebKit are wired up but skipped by default to keep the local
-    // loop fast; enable with `--project=firefox`. `EventSource` behaviour
-    // differs subtly between engines, so it is worth running before shipping.
+    // Firefox runs by default alongside Chromium: `EventSource` retry behaviour
+    // differs between engines, and that difference has already produced a real
+    // bug here (Firefox parks a failed stream in CLOSED and never retries). It
+    // skips a11y because those axe rules are engine-independent, so running
+    // them twice buys wall-clock and nothing else. WebKit is not wired up.
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },

@@ -169,8 +169,10 @@ thread that is finished.
 ## 5. Reconnect
 
 The browser reconnects on its own and sends `Last-Event-ID`. The server replays
-everything after that offset from a bounded in-memory buffer (500 events by
-default).
+everything after that offset from the session's event log — bounded, and by
+default holding the last `EVENT_RETENTION` (500) events. The log lives behind
+the `eventStream` port ([PROVIDERS.md](PROVIDERS.md)), not inside `SessionHub`;
+the hub reads it and writes SSE frames.
 
 - **Overlap is expected.** The reducer drops any `seq` it has already applied.
 - **Gaps are buffered.** An event arriving ahead of its predecessors is held
@@ -265,14 +267,21 @@ feature, and the buffer genuinely rolls.
 
 Here is the part that is *not* production-shaped, and it is one decision:
 
-> **The replay buffer is also the message store.** There is nowhere else agent
-> messages exist. `SessionHub.buffer` holds the last N events and that is the
-> entire history of the conversation.
+> **The event log is also the message store.** There is nowhere else agent
+> messages exist. The `eventStream` provider holds the last `EVENT_RETENTION`
+> events per session, and that is the entire history of the conversation.
 
-In a real system those are two different things. Events would be written to a
-durable store, and the SSE buffer would be nothing but a low-latency tail in
-front of it. A client that fell out of the window would page history from the
-store and see a complete conversation.
+In a real system those are two different things, because they answer different
+questions. A log answers *what happened next* over a window; a transcript is
+*state read by key and kept indefinitely*. Events would be written to a durable
+store at their settle points, and the log would be nothing but a low-latency
+tail in front of it. A client that fell out of the window would page history
+from the store and see a complete conversation.
+
+Note what that does **not** mean: persisting the log is not the fix. A Redis
+adapter makes this same window durable and multi-instance, and a transcript
+still expires. The division of labour is set out in
+[ARCHITECTURE.md](ARCHITECTURE.md#the-log-and-the-store-two-jobs-one-of-them-unfilled).
 
 Everything that feels wrong about recovery here follows from that one
 conflation:
@@ -287,7 +296,10 @@ conflation:
 
 So: the protocol is a faithful implementation of a real pattern, and the
 recovery path is wired end to end. What is missing is the store behind the
-snapshot — [L7](LIMITATIONS.md#l7). Add it and the same `resync` flow returns
+snapshot — [L7](LIMITATIONS.md#l7). Add it and nothing here is torn out: the
+`resync` frame, the snapshot endpoint and the reducer's gates all keep their
+shape, because a transport can still deliver duplicates and gaps after a
+reconnect however durable the history is. The snapshot simply starts returning
 messages instead of metadata, and truncation stops being user-visible.
 
 ## 6. Cancellation
@@ -319,9 +331,10 @@ protocol.
   frames, `seq` would need to account for two origins instead of one. If
   human-in-the-loop tool approval were built out, `awaiting_input` is the state
   it would use and a POST is what would resolve it.
-- **No persistence.** Sessions and the replay buffer are in memory. ADK ships
-  `DatabaseSessionService`; swapping it in is a one-line change in
-  `thread-runner.ts`.
+- **No persistence, and no message store at all.** Sessions and the event log
+  are in memory, and there is no separate store of messages behind either —
+  §5b and [L7](LIMITATIONS.md#l7). ADK ships `DatabaseSessionService` for the
+  first half; the second half is a port that does not exist yet.
 - **No shared event stream.** The stream provider is in-process, so each
   instance holds its own log and its own subscribers. A multi-instance
   deployment needs the Redis adapter (or sticky sessions). The seam exists —

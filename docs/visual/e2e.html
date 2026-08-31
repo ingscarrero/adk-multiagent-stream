@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No Sleeps, No Selectors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>No Sleeps, No Selectors</h1>
+    <p class="standfirst">38 test declarations, 63 runs, three projects and four servers &mdash; and one project that exists because the other two were green while the feature was broken.</p>
+    <span class="filepath">e2e/ + playwright.config.ts</span>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a> &middot; <a href="evals.html">Trajectory Over Answer</a></p>
+  </header>
+
+
+  <section>
+    <h2>Two rules, and everything else follows</h2>
+    <p class="lede">A streaming UI is mostly timing, and timing is where browser suites rot. Two constraints keep this one from becoming the kind of suite people re-run until it passes.</p>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">RULE 1</span><span class="card-name">Zero <code>waitForTimeout</code></span></div>
+      <p>Not "few". Zero. Every assertion is web-first &mdash; <code>expect(locator)</code> &mdash; so Playwright retries until the condition holds or the timeout expires.</p>
+      <p>A fixed sleep in a streaming test is a race that has not failed yet. It passes on the machine it was written on and fails on CI, where everything is slower and nothing is your fault. The fix is never a longer sleep.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">RULE 2</span><span class="card-name">No spec ever touches a selector</span></div>
+      <p>Specs speak in <em>"the thread whose prompt is X"</em> and <em>"its status"</em>. <code>e2e/pages/FeedPage.ts</code> owns every mapping from that vocabulary to a <code>data-testid</code>.</p>
+      <p>The subtle half: every accessor returns a <code>Locator</code>, never a resolved value. A helper that returned a string would resolve at call time, and the auto-waiting would be gone &mdash; which is how <code>waitForTimeout</code> gets back in through the abstraction that was supposed to prevent it.</p>
+    </div>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 760 250" role="img" aria-label="Three layers. Specs speak in user vocabulary and call the FeedPage page object. FeedPage maps that vocabulary to data-testid selectors and returns Locators. The DOM is below. A crossed-out dashed arrow shows that specs never reach the DOM directly. A second note shows that returning a Locator preserves auto-waiting while returning a string would not.">
+          <defs><marker id="e2-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="10" width="330" height="62" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="33" font-size="12" class="s-title">e2e/specs/*.spec.ts</text>
+          <text x="18" y="54" font-size="11" class="s-mono">feed.status(feed.thread('Where is my order'))</text>
+
+          <line x1="165" y1="72" x2="165" y2="106" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar)"/>
+          <text x="176" y="94" font-size="10.5" class="s-sub">user vocabulary</text>
+
+          <rect x="0" y="110" width="330" height="72" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="18" y="133" font-size="12" class="s-accent-text">e2e/pages/FeedPage.ts</text>
+          <text x="18" y="154" font-size="11" class="s-mono">getByTestId('thread').filter({ has: ... })</text>
+          <text x="18" y="172" font-size="11" class="s-mono">returns Locator, never string</text>
+
+          <line x1="165" y1="182" x2="165" y2="214" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar)"/>
+          <text x="176" y="202" font-size="10.5" class="s-sub">selectors</text>
+
+          <rect x="0" y="218" width="330" height="30" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="238" font-size="11.5" class="s-mono">DOM &mdash; data-testid</text>
+
+          <!-- the arrow that must not exist -->
+          <path d="M336 40 L378 40 L378 232 L336 232" class="s-dash" stroke-width="1.5"/>
+          <line x1="362" y1="120" x2="394" y2="152" class="s-line" stroke="var(--bad)" stroke-width="2"/>
+          <line x1="394" y1="120" x2="362" y2="152" class="s-line" stroke="var(--bad)" stroke-width="2"/>
+          <text x="402" y="128" font-size="11.5" class="s-bad-text">never</text>
+          <text x="402" y="146" font-size="10.5" class="s-sub">specs never reach</text>
+          <text x="402" y="162" font-size="10.5" class="s-sub">the DOM directly</text>
+
+          <rect x="510" y="10" width="250" height="86" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="526" y="32" font-size="11.5" class="s-ok-text">Locator &mdash; lazy</text>
+          <text x="526" y="52" font-size="11" class="s-sub">resolved at assertion time,</text>
+          <text x="526" y="68" font-size="11" class="s-sub">retried until it holds</text>
+          <text x="526" y="88" font-size="10.5" class="s-mono">await expect(x).toHaveText()</text>
+
+          <rect x="510" y="104" width="250" height="86" rx="7" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="526" y="126" font-size="11.5" class="s-bad-text">string &mdash; eager</text>
+          <text x="526" y="146" font-size="11" class="s-sub">resolved at call time, once,</text>
+          <text x="526" y="162" font-size="11" class="s-sub">before the stream caught up</text>
+          <text x="526" y="182" font-size="10.5" class="s-mono">expect(await x.text()).toBe()</text>
+        </svg>
+      </div>
+      <figcaption>The page object exists to keep two things out of specs: selectors, and resolved values. The second is the one that is easy to give away by accident.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Three projects over four servers</h2>
+    <p class="lede">38 test declarations, 63 runs. The arithmetic is worth following, because the third project exists for a reason the other two could not cover.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 840 320" role="img" aria-label="Three Playwright projects and the servers they run against. Chromium and Firefox both use the default pair, an API server on port 3001 and Vite on 5173 with a 500 event retention. Chromium runs 34 tests, skipping recovery. Firefox runs 25, skipping accessibility and recovery. The recovery project uses a separate pair on ports 3002 and 5174 with a 40 event retention, and runs 4 tests.">
+          <defs><marker id="e2-ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <text x="0" y="16" font-size="10.5" class="s-sub" letter-spacing="1.2">PROJECTS</text>
+          <text x="560" y="16" font-size="10.5" class="s-sub" letter-spacing="1.2">SERVERS</text>
+
+          <rect x="0" y="30" width="250" height="66" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="52" font-size="12" class="s-title">chromium</text>
+          <text x="18" y="72" font-size="11" class="s-mono">34 tests</text>
+          <text x="18" y="89" font-size="10.5" class="s-sub">testIgnore: recovery</text>
+
+          <rect x="0" y="108" width="250" height="66" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="130" font-size="12" class="s-title">firefox</text>
+          <text x="18" y="150" font-size="11" class="s-mono">25 tests</text>
+          <text x="18" y="167" font-size="10.5" class="s-sub">testIgnore: a11y, recovery</text>
+
+          <rect x="0" y="200" width="250" height="82" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="18" y="222" font-size="12" class="s-accent-text">recovery</text>
+          <text x="18" y="242" font-size="11" class="s-mono">4 tests</text>
+          <text x="18" y="259" font-size="10.5" class="s-sub">testMatch: recovery.spec.ts</text>
+          <text x="18" y="275" font-size="10.5" class="s-sub">the layer that caught three bugs</text>
+
+          <line x1="250" y1="63" x2="556" y2="86" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar2)"/>
+          <line x1="250" y1="141" x2="556" y2="104" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar2)"/>
+          <line x1="250" y1="241" x2="556" y2="222" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar2)"/>
+
+          <rect x="560" y="56" width="280" height="86" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="578" y="78" font-size="11.5" class="s-title">the default pair</text>
+          <text x="578" y="98" font-size="11" class="s-mono">:3001 api &middot; :5173 vite</text>
+          <text x="578" y="118" font-size="11" class="s-mono">EVENT_RETENTION=500</text>
+          <text x="578" y="134" font-size="10.5" class="s-sub">an overrun needs ~25 prompts: unreachable</text>
+
+          <rect x="560" y="192" width="280" height="86" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="578" y="214" font-size="11.5" class="s-accent-text">the small-buffer pair</text>
+          <text x="578" y="234" font-size="11" class="s-mono">:3002 api &middot; :5174 vite</text>
+          <text x="578" y="254" font-size="11" class="s-mono">EVENT_RETENTION=40</text>
+          <text x="578" y="270" font-size="10.5" class="s-sub">under two threads' worth: an overrun in two prompts</text>
+        </svg>
+      </div>
+      <figcaption>The recovery project is not a browser variant. It is a different <em>server</em> &mdash; the only way to make a replay-buffer overrun happen inside a test's patience.</figcaption>
+    </figure>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Spec</th><th class="mono">Tests</th><th>What it holds down</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">streaming.spec.ts</td><td class="mono">9</td><td>Text arrives incrementally; tool steps expand; the specialist is credited, not the router; parallel agents keep separate messages; the synthesiser runs last</td></tr>
+          <tr><td class="mono">resilience.spec.ts</td><td class="mono">10</td><td>Cancel mid-stream leaves no message stuck streaming and no other thread affected; reload restores; reconnect does not duplicate; the composer never locks</td></tr>
+          <tr><td class="mono">a11y.spec.ts</td><td class="mono">9</td><td>axe over empty, streaming, errored and dark states, plus the judgements axe cannot make</td></tr>
+          <tr><td class="mono">concurrency.spec.ts</td><td class="mono">6</td><td>Three threads to completion with independent transcripts, uncorrupted text across the interleave, an accurate active count</td></tr>
+          <tr><td class="mono">recovery.spec.ts</td><td class="mono">4</td><td>Overrun, resync, and the counters that make it visible</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>The fourth layer, and why it had to exist</h2>
+    <p class="lede">Three test layers were green while the resync feature was broken. Three separate times.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 800 250" role="img" aria-label="Four test layers shown as boxes in a row: server, reducer, and hook all pass, each correct in isolation. The browser layer spans all three and fails. Arrows between the passing layers are labelled as the seams where the bug actually lived, showing that per-layer correctness does not compose.">
+          <defs><marker id="e2-ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="40" width="180" height="72" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="62" font-size="11.5" class="s-ok-text">server &#10003;</text>
+          <text x="16" y="82" font-size="10.5" class="s-mono">stream.test.ts</text>
+          <text x="16" y="99" font-size="10.5" class="s-sub">emits the frame correctly</text>
+
+          <rect x="210" y="40" width="180" height="72" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="226" y="62" font-size="11.5" class="s-ok-text">reducer &#10003;</text>
+          <text x="226" y="82" font-size="10.5" class="s-mono">reducer.test.ts</text>
+          <text x="226" y="99" font-size="10.5" class="s-sub">rebuilds correctly</text>
+
+          <rect x="420" y="40" width="180" height="72" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="436" y="62" font-size="11.5" class="s-ok-text">hook &#10003;</text>
+          <text x="436" y="82" font-size="10.5" class="s-mono">useFeedStream.test.ts</text>
+          <text x="436" y="99" font-size="10.5" class="s-sub">dispatches on the frame</text>
+
+          <line x1="180" y1="76" x2="206" y2="76" class="s-line" stroke-width="1.5"/>
+          <line x1="390" y1="76" x2="416" y2="76" class="s-line" stroke-width="1.5"/>
+          <text x="193" y="30" font-size="18" class="s-bad-text" text-anchor="middle">&#8226;</text>
+          <text x="403" y="30" font-size="18" class="s-bad-text" text-anchor="middle">&#8226;</text>
+          <text x="298" y="20" font-size="11" class="s-bad-text" text-anchor="middle">the bug lived in these two seams</text>
+
+          <rect x="0" y="150" width="600" height="74" rx="7" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="16" y="174" font-size="11.5" class="s-bad-text">browser &#10007;</text>
+          <text x="16" y="194" font-size="10.5" class="s-mono">e2e/specs/recovery.spec.ts &mdash; against EVENT_RETENTION=40</text>
+          <text x="16" y="212" font-size="10.5" class="s-sub">the only layer that spans the seams, and the only one that went red</text>
+
+          <path d="M300 112 L300 146" class="s-line" stroke-width="1.5" marker-end="url(#e2-ar3)"/>
+
+          <text x="624" y="176" font-size="12" class="s-title">Layered tests prove</text>
+          <text x="624" y="196" font-size="12" class="s-title">each layer, not that</text>
+          <text x="624" y="216" font-size="12" class="s-title">you enumerated</text>
+          <text x="624" y="236" font-size="12" class="s-title">the cases.</text>
+        </svg>
+      </div>
+      <figcaption>Each of the three unit layers asserted its own half of the contract and was right. Nothing asserted that the halves met.</figcaption>
+    </figure>
+
+    <p>The bugs, in the order they shipped: a client that reconnected with no resume point and so triggered a fresh notice forever; a rebuilt thread that adopted the snapshot's <code>lastSeq</code> as a watermark and discarded the replay that followed; and a fresh page load taking a branch of the overrun check that only handled <em>resuming</em> clients. Each is <a href="../LIMITATIONS.md">L1</a>. Each was found by driving a real browser.</p>
+
+    <div class="note">
+      <span class="note-label">Verified, not assumed</span>
+      <p>The recovery project was checked against the bugs it claims to catch by reintroducing the watermark bug on purpose: two browser tests and five reducer tests went red, then the change was reverted. A regression test nobody has watched fail is a hypothesis.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The fixtures that make failures legible</h2>
+
+    <h3>Console errors fail the test</h3>
+    <p>The <code>consoleErrors</code> fixture catches the class of bug that leaves the UI looking correct while React throws quietly in an effect &mdash; exactly what a streaming app is prone to. A test that <em>intends</em> to break something declares it:</p>
+
+    <pre><code>allowConsoleError(testInfo, /establish a connection/, 'the stream is blocked deliberately');</code></pre>
+
+    <p>Per-test, via an annotation, rather than a per-file <code>test.use</code> option. Two things follow: the guard stays strict everywhere else instead of being weakened for a whole file, and the suppression shows up in the HTML report with its reason attached &mdash; so a reader can see which tests suppress what, and why.</p>
+
+    <p>The ignore list is patterns rather than strings because the engines disagree on wording: Chromium writes <code>net::ERR_</code>, Firefox writes prose for the same failure.</p>
+
+    <h3>Accessibility, tested twice</h3>
+    <p><code>@axe-core/playwright</code> scans the empty, streaming, errored and dark-mode states. Separate assertions cover what axe cannot judge &mdash; whether the <em>right</em> content is live.</p>
+    <div class="note warn">
+      <span class="note-label">The judgement axe cannot make</span>
+      <p>A feed that announces every streaming token is technically conformant and practically unusable. So the specs assert that streaming prose is <strong>not</strong> in a live region, and that each thread has exactly one live region carrying its status. Conformance is a floor, not the goal.</p>
+      <p>The scan has already paid for itself: it caught two genuine contrast failures in the light palette &mdash; 4.49:1 against a 4.5:1 threshold, and an error code made translucent for visual weight, which dropped it below the line.</p>
+    </div>
+
+    <h3>Both engines, for a specific reason</h3>
+    <p>Chromium retries a dropped <code>EventSource</code> indefinitely. Firefox gives up on some failures and parks the connection in <code>CLOSED</code>, where nothing reopens it. That bug was found by running the suite in Firefox, and the fix &mdash; an explicit <code>readyState</code> watch in <code>useFeedStream</code> &mdash; is guarded there. See <a href="sse-hub.html">One Wire, Many Threads</a> for the manual resume path it needs.</p>
+    <p>Firefox skips <code>a11y.spec.ts</code>: the axe rules being checked are engine-independent, and running them twice buys nothing but wall-clock.</p>
+  </section>
+
+  <section>
+    <h2>Configuration worth knowing</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="mono">Setting</th><th>Value</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">fullyParallel</td><td>true</td><td>The session id lives in <code>sessionStorage</code>, so each browser context is its own session. Files cannot interfere</td></tr>
+          <tr><td class="mono">retries</td><td>2 on CI, 0 locally</td><td>Locally a flake should be seen, not smoothed over. On CI a retry beats a red build from an infrastructure hiccup &mdash; and <code>trace: 'on-first-retry'</code> means the retry produces a diagnosis</td></tr>
+          <tr><td class="mono">forbidOnly</td><td>on CI</td><td>A stray <code>test.only</code> silently skips the suite. This turns that into a failure</td></tr>
+          <tr><td class="mono">reuseExistingServer</td><td>not on CI</td><td>Fast local loop against a dev server already up; a clean boot in CI</td></tr>
+          <tr><td class="mono">expect.timeout</td><td>10s</td><td>Long enough for a scripted thread to finish streaming, short enough that a hang fails rather than hanging the job</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Traces are the difference between "flaky, re-running" and a diagnosis. <code>trace: 'on-first-retry'</code>, <code>video: 'retain-on-failure'</code>, <code>screenshot: 'only-on-failure'</code> &mdash; all three cost nothing on a green run.</p>
+  </section>
+
+  <section>
+    <h2>What this suite does not cover</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Gap</th><th>Consequence</th></tr></thead>
+        <tbody>
+          <tr><td>Load and backpressure</td><td>No test opens a hundred threads or a stalled consumer. <a href="../LIMITATIONS.md">L2</a> is unguarded</td></tr>
+          <tr><td>Visual regression</td><td>No screenshot comparison. A layout change breaks nothing red</td></tr>
+          <tr><td>Mobile viewports</td><td>No mobile project, and no CSS breakpoints to test &mdash; <a href="../LIMITATIONS.md">L6</a></td></tr>
+          <tr><td>Multi-instance</td><td>Single process. Nothing exercises a reconnect landing on a different server</td></tr>
+          <tr><td>WebKit</td><td>Two engines, not three. <code>EventSource</code> behaviour there is unverified</td></tr>
+          <tr><td>The real model</td><td>Scripted only, by design. Timing against a live API is what makes streaming suites flaky</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>Run <code>pnpm exec playwright test --project=recovery</code>, then set <code>EVENT_RETENTION=500</code> on the <code>:3002</code> server and run it again. Which of the four tests still means anything?</li>
+      <li>Change one <code>FeedPage</code> accessor to <code>async</code> and return <code>await locator.textContent()</code>. Find a spec that goes flaky, and say which retry you removed.</li>
+      <li><code>concurrency.spec.ts</code> asserts that interleaved threads keep uncorrupted text. Which server-side invariant would have to break for it to fail &mdash; and which reducer gate would catch it first?</li>
+      <li>Comment out the <code>allowConsoleError</code> call in the reconnect test. What fails, and is the failure about the app or about the test?</li>
+    </ol>
+  </section>
+
+
+  <footer class="foot">
+    One of nine visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

@@ -16,9 +16,11 @@
 │  apps/server         Express 5          ▼               │
 │                                                         │
 │   routes ── ThreadRunner ── SessionHub ──► subscribers  │
-│                  │            (seq, replay buffer)      │
-│                  ▼                                      │
-│           AdkEventTranslator   ◄── the only ADK seam    │
+│                  │          (seq)   │                   │
+│                  ▼                  ▼                   │
+│         AdkEventTranslator      EventStream             │
+│         ◄── the only ADK seam   ◄── the log, behind a   │
+│                                     port (append/open)  │
 └──────────────────┬──────────────────────────────────────┘
                    │ ADK Event stream
 ┌──────────────────▼──────────────────────────────────────┐
@@ -31,7 +33,8 @@
 
   packages/protocol   zod schemas + status machine, shared by all of the above
   packages/providers  ports + adapters for everything this app does not implement
-                      itself: sessions, knowledge, identity  (docs/PROVIDERS.md)
+                      itself: sessions, knowledge, identity, eventStream
+                      (docs/PROVIDERS.md)
   packages/eval       ADK-style agent evaluation (Python-only in ADK itself)
 ```
 
@@ -59,7 +62,7 @@ Three things fall out:
 ### 2. Substrate sits behind a port
 
 Anything this app does not implement itself — conversation storage, retrieval,
-identity — is reached through an interface in `packages/providers`, with an
+identity, the event log — is reached through an interface in `packages/providers`, with an
 emulated adapter by default and a real one behind a config flag. `GET
 /api/health` reports which is active.
 
@@ -155,15 +158,87 @@ responses carrying only the new chunk, then one final non-partial response
 carrying the whole text. That fidelity is what makes it safe to write the
 adapter against the fake and trust it against the real one.
 
+## The log and the store: two jobs, one of them unfilled
+
+The event stream and a message store look like the same thing stored twice. They
+are not, and the difference decides what gets built next.
+
+| | `eventStream` | `messageStore` (planned) |
+|---|---|---|
+| Answers | *what happened next?* | *what is this thread?* |
+| Access | sequential, from an offset | random, by `threadId` |
+| Lifetime | a retention window — seconds to minutes | permanent |
+| Unit | an **event**: a three-word delta, a status change | a **message**: settled final text |
+| Volume | ~23 per thread | ~2 per thread |
+| Consumer | whoever is tailing, right now | whoever asks, later |
+
+The load-bearing detail is that **`message.delta` does not belong in a store.**
+A delta is a transport artefact; "the fourth chunk of the second message" is
+worthless the moment `message.complete` lands. Its whole value is latency —
+showing text before it is finished. A store writes at settle points only, which
+is roughly five writes per thread rather than twenty-three.
+
+So neither replaces the other:
+
+- The **stream** is required by *stream tokens as they are generated*. Without
+  it there is no product.
+- The **store** is required by *the transcript still exists tomorrow*. Without
+  it, history has an expiry date measured in events — which is today
+  ([L7](LIMITATIONS.md#l7), [L16](LIMITATIONS.md#l16)).
+
+Having a stream was never the mistake. Using the stream **as** the store is.
+
+### Where they overlap, and which one wins
+
+Inside the retention window either could serve a reconnecting client. That
+overlap is a deliberate cache, and one rule resolves it:
+
+> **The store is truth. The stream is an optimisation.** Where they disagree,
+> the store is right.
+
+Which yields the fallback the recovery path already has the shape of:
+
+| Client is | Served by | Cost |
+|---|---|---|
+| inside the window | stream replay | no query |
+| outside the window | store query, then tail | one query |
+| brand new | store query, then tail | one query |
+
+Today rows two and three return identity with no messages, and the UI says so.
+Adding the store does not delete the `resync` flow — it gives it something to
+return. The reducer's gates are unaffected either way: a transport can still
+deliver duplicates and gaps after a reconnect, so per-thread `seq` and idempotent
+application keep earning their place.
+
+### Why not drop the log and keep only a store
+
+That is the conventional chat-product architecture — durable store, plus a
+socket that carries liveness — and for this feed alone it would be enough.
+
+The log is kept for a reason specific to *agents*: tool calls, transfers, status
+transitions and token accounting are interesting to consumers that are not the
+UI — evaluation, observability, audit, billing. A store keyed by thread serves
+the transcript well and serves those badly. So the stream stays, demoted from
+"the only copy" to "liveness, plus the integration point".
+
+The comparison this repo keeps coming back to is Postgres: the WAL is ordered,
+sequential and truncated; the tables are keyed, random-access and permanent. It
+writes both, and no one calls that redundant.
+
 ## Deliberate limits
 
 The complete register — including gaps that are *not* deliberate — is
 [LIMITATIONS.md](LIMITATIONS.md). The ones that shape the architecture:
 
-- **In-memory everything.** Sessions, threads, replay buffers. ADK's
-  `DatabaseSessionService` is a one-line swap in `thread-runner.ts`.
-- **Single instance.** One process owns a session's hub. Multi-instance needs
-  sticky sessions or a shared pub/sub.
+- **In-memory everything.** Sessions, threads, the event log. Each now has a
+  port, so each is a config change rather than a refactor — but only the
+  emulated adapters are written ([L7](LIMITATIONS.md#l7)).
+- **Single instance.** One process owns a session's log and its subscribers.
+  Multi-instance needs the Redis `eventStream` adapter, or sticky sessions
+  ([L8](LIMITATIONS.md#l8)).
+- **No message store.** The event log is the only place messages exist. This is
+  the one architectural conflation in the repo, and it has its own section
+  below.
 - **No auth.** `sessionId` is client-generated and unauthenticated. Real
   deployments need a real identity on the stream.
 - **`maxLlmCalls: 20`** per run, as a runaway-loop backstop.

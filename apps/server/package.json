@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start:test": "cross-env PORT=3001 tsx src/index.ts",
-    "dev:recovery": "cross-env-shell PORT=3002 SSE_REPLAY_BUFFER=${SSE_REPLAY_BUFFER:-40} tsx watch src/index.ts"
+    "dev:recovery": "cross-env-shell PORT=3002 EVENT_RETENTION=${EVENT_RETENTION:-40} tsx watch src/index.ts"
   },
   "dependencies": {
     "@feed/agents": "workspace:*",

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trajectory Over Answer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>Trajectory Over Answer</h1>
+    <p class="standfirst">Two agents can give the same answer while one looked it up and the other guessed. Only the path taken tells them apart &mdash; which is why the agent evals score trajectory strictly and wording loosely.</p>
+    <span class="filepath">packages/eval/</span>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a> &middot; <a href="e2e.html">No Sleeps, No Selectors</a></p>
+  </header>
+
+
+  <section>
+    <h2>The question a unit test cannot ask</h2>
+    <p class="lede">A unit test asks whether the code does what it says. An eval asks whether the <em>agent</em> still behaves &mdash; and those two can diverge without a single line changing.</p>
+
+    <p>Every test in this repo passes if the wiring is intact. None of them notices when a prompt edit makes the router stop calling <code>lookupOrder</code> and start guessing an order number that happens to look right. The answer still renders. The status machine still settles. The stream is still ordered. Nothing is broken except the part that matters.</p>
+
+    <p>That is the gap <code>packages/eval</code> exists to close, and the reason it scores two things rather than one.</p>
+
+    <div class="note">
+      <span class="note-label">Worth knowing</span>
+      <p>ADK's own evaluation tooling &mdash; <code>AgentEvaluator</code>, evalset files, the <code>adk eval</code> command &mdash; ships in <strong>adk-python only</strong>. <code>@google/adk</code> v2.0.0 has no equivalent. This package is a small reimplementation of the same ideas in TypeScript, using ADK's metric names so the numbers mean the same thing to anyone arriving from the Python docs.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Two axes, and the quadrant that justifies both</h2>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 640 400" role="img" aria-label="A two by two grid. The horizontal axis is response match, the vertical axis is tool trajectory. Top right, both scores high, is a genuine pass. Top left, the right path but the wrong words, is a prompt or tool regression. Bottom right, the right answer reached without taking the path, is the agent guessing and getting lucky -- the quadrant only the trajectory metric can detect. Bottom left, both scores low, is a plainly broken agent.">
+          <defs><marker id="ev-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <!-- axes -->
+          <line x1="86" y1="330" x2="560" y2="330" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar)"/>
+          <line x1="86" y1="330" x2="86" y2="30" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar)"/>
+          <text x="323" y="360" font-size="12" text-anchor="middle" class="s-sub">response_match_score &mdash; did it say the right words?</text>
+          <text x="-180" y="20" font-size="12" text-anchor="middle" class="s-sub" transform="rotate(-90)">tool_trajectory_avg_score</text>
+
+          <!-- quadrants: trajectory rises up the y axis, so traj 1.00 is the top row -->
+          <rect x="96" y="40" width="215" height="136" rx="6" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="112" y="64" font-size="12.5" class="s-warn-text">Right path, wrong words</text>
+          <text x="112" y="84" font-size="11" class="s-mono">traj 1.00 &middot; resp 0.31</text>
+          <text x="112" y="106" font-size="11.5" class="s-sub">The tools ran and returned.</text>
+          <text x="112" y="122" font-size="11.5" class="s-sub">The answer drifted &mdash; a prompt</text>
+          <text x="112" y="138" font-size="11.5" class="s-sub">edit, or a tool's output changed.</text>
+
+          <rect x="325" y="40" width="215" height="136" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="341" y="64" font-size="12.5" class="s-ok-text">Genuine pass</text>
+          <text x="341" y="84" font-size="11" class="s-mono">traj 1.00 &middot; resp 0.94</text>
+          <text x="341" y="106" font-size="11.5" class="s-sub">Looked it up, then said what</text>
+          <text x="341" y="122" font-size="11.5" class="s-sub">it found. The only quadrant</text>
+          <text x="341" y="138" font-size="11.5" class="s-sub">that counts as working.</text>
+
+          <rect x="96" y="186" width="215" height="136" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="112" y="210" font-size="12.5" class="s-bad-text">Plainly broken</text>
+          <text x="112" y="230" font-size="11" class="s-mono">traj 0.00 &middot; resp 0.12</text>
+          <text x="112" y="252" font-size="11.5" class="s-sub">Loud, and the easy case.</text>
+          <text x="112" y="268" font-size="11.5" class="s-sub">Any check at all catches it.</text>
+
+          <rect x="325" y="186" width="215" height="136" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="341" y="210" font-size="12.5" class="s-bad-text">Guessed, got lucky</text>
+          <text x="341" y="230" font-size="11" class="s-mono">traj 0.00 &middot; resp 0.91</text>
+          <text x="341" y="252" font-size="11.5" class="s-sub">Right answer, no lookup.</text>
+          <text x="341" y="268" font-size="11.5" class="s-sub">Reads as success everywhere</text>
+          <text x="341" y="284" font-size="11.5" class="s-sub">except the trajectory score.</text>
+
+          <text x="548" y="256" font-size="11" class="s-accent-text">&larr; this one</text>
+        </svg>
+      </div>
+      <figcaption>The bottom-right quadrant is the whole argument for scoring trajectory. An agent that fabricates a plausible answer scores well on every text metric and ships. Only the path taken distinguishes it from an agent that actually looked.</figcaption>
+    </figure>
+
+    <p>Hence the thresholds in <code>support.evalset.json</code>: <code>toolTrajectory: 1</code> and <code>responseMatch: 0.5</code>. They are deliberately lopsided. The path must be <em>exactly</em> right; the wording only has to be close. Phrasing is the model's business, and a reference answer is one person's guess at how to say something. Which tools ran, in which order, with which arguments, is not a matter of taste.</p>
+  </section>
+
+  <section>
+    <h2>Where each number comes from</h2>
+    <p class="lede">One agent run produces both scores, through two different filters over the same event list. Each filter is one line, and each is wrong in a way that looks fine.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 880 300" role="img" aria-label="A pipeline. InMemoryRunner produces an ADK event list. The trajectory branch flattens content parts, keeps function calls, and drops the four ADK framework calls such as transfer to agent, producing the actual trajectory. The response branch keeps only non-partial events, takes their text, and joins it, producing the settled answer. Both feed the grade function.">
+          <defs><marker id="ev-ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="118" width="150" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="75" y="142" font-size="11.5" text-anchor="middle" class="s-mono">InMemoryRunner</text>
+          <text x="75" y="161" font-size="11" text-anchor="middle" class="s-sub">runEphemeral</text>
+
+          <line x1="150" y1="148" x2="196" y2="148" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar2)"/>
+          <rect x="200" y="118" width="110" height="60" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="255" y="143" font-size="11.5" text-anchor="middle" class="s-accent-text">Event[]</text>
+          <text x="255" y="161" font-size="10.5" text-anchor="middle" class="s-sub">one list</text>
+
+          <!-- trajectory branch -->
+          <path d="M310 138 L350 138 L350 62 L392 62" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar2)"/>
+          <text x="342" y="96" font-size="10.5" text-anchor="end" class="s-sub">function calls</text>
+          <rect x="396" y="30" width="230" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="410" y="52" font-size="11" class="s-mono">.flatMap(parts).filter(fnCall)</text>
+          <text x="410" y="72" font-size="11" class="s-mono">.filter(!FRAMEWORK_CALLS)</text>
+          <text x="410" y="88" font-size="10.5" class="s-warn-text">drops transfer_to_agent + 3 more</text>
+
+          <line x1="626" y1="62" x2="672" y2="62" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar2)"/>
+          <rect x="676" y="34" width="196" height="56" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="690" y="56" font-size="11.5" class="s-ok-text">actual trajectory</text>
+          <text x="690" y="76" font-size="10.5" class="s-mono">[lookupOrder, checkShipping]</text>
+
+          <!-- response branch -->
+          <path d="M310 158 L350 158 L350 234 L392 234" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar2)"/>
+          <text x="342" y="204" font-size="10.5" text-anchor="end" class="s-sub">settled text</text>
+          <rect x="396" y="202" width="230" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="410" y="224" font-size="11" class="s-mono">.filter(!event.partial)</text>
+          <text x="410" y="244" font-size="11" class="s-mono">.map(part.text).join(' ')</text>
+          <text x="410" y="260" font-size="10.5" class="s-warn-text">partials would count every token twice</text>
+
+          <line x1="626" y1="234" x2="672" y2="234" class="s-line" stroke-width="1.5" marker-end="url(#ev-ar2)"/>
+          <rect x="676" y="206" width="196" height="56" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="690" y="228" font-size="11.5" class="s-ok-text">actual response</text>
+          <text x="690" y="248" font-size="10.5" class="s-mono">"Order A-1001 has shipped..."</text>
+
+          <path d="M774 90 L774 140 L700 140 L700 190" class="s-dash" stroke-width="1.5"/>
+          <path d="M774 206 L774 170" class="s-dash" stroke-width="1.5"/>
+          <text x="790" y="152" font-size="11" class="s-accent-text">grade()</text>
+        </svg>
+      </div>
+      <figcaption>Two filters over one event list. Both are one line, and both are the kind of line that produces a confidently wrong number rather than a crash.</figcaption>
+    </figure>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">FILTER 1</span><span class="card-name">Framework calls are ADK's, not the agent's</span></div>
+      <p><code>transfer_to_agent</code>, <code>adk_request_confirmation</code>, <code>adk_request_credential</code> and <code>adk_request_input</code> are excluded from the trajectory. They appear in the event stream as ordinary function calls, and they are not decisions the agent made about the user's problem &mdash; they are the framework's control plane.</p>
+      <p>Leaving them in would mean every evalset for the router has to open with <code>transfer_to_agent</code>, which couples the expectations to ADK's routing implementation. Swap <code>LlmAgent</code> transfer for the <code>Workflow</code> graph API (<a href="../LIMITATIONS.md">L15</a>) and every case breaks without the agent's behaviour changing at all.</p>
+    </div>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">FILTER 2</span><span class="card-name">Only non-partial events carry settled text</span></div>
+      <p>ADK emits one <code>partial: true</code> event per streamed chunk, then a final non-partial event carrying the <em>whole</em> text. Concatenating everything counts each token roughly twice &mdash; once in its chunk, once in the final event.</p>
+      <p>The failure mode is quiet, and it is quiet in the flattering direction. A doubled answer still contains every reference word, so recall stays at 1.0 while precision halves. F1 lands near 0.67 instead of 1.0 &mdash; low enough to look like ordinary model variance, high enough to keep passing a 0.5 threshold. See <a href="scripted-llm.html">A Model That Never Changes Its Mind</a> for the streaming shape both models share.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scoring a trajectory</h2>
+    <p class="lede">Per step, over the longer of the two sequences. That denominator is the whole design.</p>
+
+    <pre><code>const length = Math.max(expected.length, actual.length);
+if (length === 0) return 1;              <span class="cmt">// no tools expected, none called: correct</span>
+
+let matched = 0;
+for (let i = 0; i &lt; length; i += 1) {
+  const want = expected[i];
+  const got = actual[i];
+  if (!want || !got) continue;           <span class="cmt">// past the end of one side: unmatched</span>
+  if (want.name === got.name &amp;&amp; argsMatch(want.args, got.args)) matched += 1;
+}
+return matched / length;</code></pre>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Expected</th><th>Actual</th><th class="mono">Score</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">[lookup, shipping]</td><td class="mono">[lookup, shipping]</td><td class="mono">1.00</td><td>Both steps match in position</td></tr>
+          <tr><td class="mono">[lookup, shipping]</td><td class="mono">[lookup]</td><td class="mono">0.50</td><td>Stopped early. Denominator stays 2, so the missing step costs</td></tr>
+          <tr><td class="mono">[lookup, shipping]</td><td class="mono">[lookup, shipping, lookup]</td><td class="mono">0.67</td><td>Extra step. Denominator becomes 3 &mdash; a redundant call is a regression</td></tr>
+          <tr><td class="mono">[lookup, shipping]</td><td class="mono">[shipping, lookup]</td><td class="mono">0.00</td><td>Order matters. Checking shipping on an order you have not looked up is different behaviour, not a reordering</td></tr>
+          <tr><td class="mono">[]</td><td class="mono">[]</td><td class="mono">1.00</td><td>Answering "hello there" without tools is correct, not vacuous</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Arguments compare as a subset</h3>
+    <p>An actual call matches if it contains at least the expected keys with the expected values. Extra keys are allowed.</p>
+    <pre><code>expected: { orderId: 'A-1001' }
+actual:   { orderId: 'A-1001', includeHistory: false }   <span class="cmt">&rarr; matches</span></code></pre>
+    <p>Strict equality would make every case brittle against a tool gaining an optional parameter &mdash; which is a change in the <em>tool</em>, not a regression in the <em>agent</em>. The evalset should fail when the agent's behaviour changes, and stay quiet when the surrounding code grows.</p>
+  </section>
+
+  <section>
+    <h2>Scoring a response</h2>
+    <p class="lede">ROUGE-1 F1 over unigrams. Not exact match, not a judge, and both of those are decisions.</p>
+
+    <pre><code>precision = overlap / actual.length      <span class="cmt">// how much of the answer was in the reference</span>
+recall    = overlap / expected.length    <span class="cmt">// how much of the reference the answer covered</span>
+F1        = 2PR / (P + R)</code></pre>
+
+    <p><strong>Why F1 and not recall.</strong> Recall alone is trivially gamed: an answer that pastes the reference in among four paragraphs of filler scores 1.0. Precision punishes the padding. A correct answer phrased differently still scores well; a confidently wrong one does not.</p>
+
+    <p><strong>Bag semantics, not set.</strong> The overlap counter decrements a <code>Map</code> of remaining reference tokens, so a word appearing twice in the reference can be matched twice and no more. A set would let one repeated word in the answer cover every occurrence.</p>
+
+    <div class="note warn">
+      <span class="note-label">The honest limit</span>
+      <p>ROUGE-1 is word overlap. It cannot tell <em>"delivery is 2 September"</em> from <em>"delivery is not 2 September"</em> &mdash; one token differs and F1 barely moves. That is exactly what <code>mustContain</code> is for: a cheap, unambiguous grounding assertion (<code>"A-1001"</code>, <code>"30 days"</code>) checked as a case-insensitive substring alongside the fuzzy score. Fuzzy metric for phrasing, hard assertion for facts.</p>
+    </div>
+
+    <h3>Why not an LLM judge</h3>
+    <p>A judge model would be more expressive and would also make the suite non-reproducible &mdash; which defeats the purpose of using it as a regression gate. The same evalset runs inside <code>pnpm test</code>, in CI, with no API key; a judge would mean network, cost, and a score that moves on its own between runs.</p>
+    <p>The place for a judge is a separate, opt-in run against the real model, where non-determinism is already the point.</p>
+  </section>
+
+  <section>
+    <h2>What it looks like, and where it runs</h2>
+
+    <pre><code>support &mdash; 6 cases
+thresholds: trajectory &gt;= 1, response &gt;= 0.5
+
+  <span class="s-ok-text">&#10003;</span> order-tracking               traj 1.00  resp 0.94  315ms
+  <span class="s-ok-text">&#10003;</span> order-status-no-tracking     traj 1.00  resp 0.86  161ms
+  <span class="s-ok-text">&#10003;</span> warranty-policy              traj 1.00  resp 1.00  191ms
+  <span class="s-ok-text">&#10003;</span> returns-policy               traj 1.00  resp 1.00  156ms
+  <span class="s-ok-text">&#10003;</span> no-tools-needed              traj 1.00  resp 1.00    1ms
+  <span class="s-ok-text">&#10003;</span> research-pipeline            traj 1.00  resp 0.52  160ms
+
+6/6 passed  (avg trajectory 1.00, avg response 0.89)</code></pre>
+
+    <p><code>research-pipeline</code> at 0.52 is the case sitting closest to its threshold, and that is expected rather than alarming: the synthesiser writes prose from two parallel findings, so its wording is the least constrained thing the suite scores. Its <code>mustContain</code> is what actually pins it.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Runs as</th><th>Command</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>CLI</td><td class="mono">pnpm eval</td><td>Reading a failure. Prints per-case scores and the diff between expected and actual trajectory</td></tr>
+          <tr><td>Vitest</td><td class="mono">pnpm test</td><td>The gate. A prompt or graph change cannot land without the behavioural expectations being rechecked</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The dual run matters more than it sounds. An evalset that only runs on demand is documentation; one that runs in CI is a contract. Putting it inside <code>pnpm test</code> means the 6 cases are as load-bearing as the 217 unit tests around them.</p>
+
+    <h3>Against the runner, not the server</h3>
+    <p><code>runEvalCase</code> drives <code>InMemoryRunner</code> directly rather than going through HTTP. Evals grade the <em>agent</em>; routing them through the transport means a failing case could be the agent, the adapter, the hub, or the buffer. <code>chunkDelayMs: 0</code> for the same reason &mdash; streaming timing is <a href="e2e.html">the browser suite's</a> problem, not this one.</p>
+  </section>
+
+  <section>
+    <h2>What this does not cover</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Gap</th><th>Consequence</th></tr></thead>
+        <tbody>
+          <tr><td>Scripted model only</td><td>A failure means the graph or the prompts changed, never that the model drifted. Real drift is invisible here by construction</td></tr>
+          <tr><td>Single turn per case</td><td>ADK's evalset format supports multi-turn; this one drops it, along with session-state fixtures. Matches <a href="../LIMITATIONS.md">L4</a> &mdash; a thread takes one prompt</td></tr>
+          <tr><td>One evalset</td><td><code>support</code> only. The research pipeline has a single case inside it rather than a set of its own</td></tr>
+          <tr><td>No regression on scores</td><td>Thresholds are absolute, not relative. A case sliding from 0.94 to 0.55 passes silently</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>Change <code>lookupOrder</code> to take <code>{ id }</code> instead of <code>{ orderId }</code>, leaving everything else alone. Which score moves, and which stays at 1.00?</li>
+      <li>Delete the <code>.filter((event) =&gt; !event.partial)</code> in <code>runner.ts</code> and run <code>pnpm eval</code>. Predict the direction the response scores move before you look &mdash; then check whether any case actually fails.</li>
+      <li><code>no-tools-needed</code> expects an empty trajectory and scores 1.00. What would the score be if <code>toolTrajectoryScore</code> returned <code>0</code> for the empty case instead, and which of the six cases would still pass?</li>
+      <li>Add <code>transfer_to_agent</code> back into the expected trajectory of <code>warranty-policy</code>. It genuinely happens at runtime &mdash; so why does the case now fail?</li>
+    </ol>
+  </section>
+
+
+  <footer class="foot">
+    One of nine visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>
