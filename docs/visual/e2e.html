@@ -425,7 +425,7 @@
       <table>
         <thead><tr><th>Gap</th><th>Consequence</th></tr></thead>
         <tbody>
-          <tr><td>Load and backpressure</td><td>No test opens a hundred threads or a stalled consumer. <a href="../LIMITATIONS.md">L2</a> is unguarded</td></tr>
+          <tr><td>Load</td><td>No test opens a hundred threads. The backpressure ceiling itself is unit-tested against a fake <code>Response</code> in <code>sse.test.ts</code>, but nothing drives a real stalled socket through a browser</td></tr>
           <tr><td>Visual regression</td><td>No screenshot comparison. A layout change breaks nothing red</td></tr>
           <tr><td>Mobile viewports</td><td>No mobile project, and no CSS breakpoints to test &mdash; <a href="../LIMITATIONS.md">L6</a></td></tr>
           <tr><td>Multi-instance</td><td>Single process. Nothing exercises a reconnect landing on a different server</td></tr>

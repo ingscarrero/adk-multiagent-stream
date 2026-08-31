@@ -482,6 +482,22 @@
     </div>
 
     <div class="card ok">
+      <div class="card-head"><span class="card-num">MEMORY</span><span class="card-name">Three ceilings, because a long-lived connection has three ways to grow</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>What grows</th><th>Bound</th><th>What happens at the limit</th></tr></thead>
+          <tbody>
+            <tr><td>Events kept for one session</td><td class="mono">EVENT_RETENTION</td><td>Oldest roll out; a client below them is told to resync</td></tr>
+            <tr><td>Number of sessions</td><td class="mono">SESSION_IDLE_TTL_MS</td><td>A hub with no subscribers, gone quiet, is swept &mdash; and its log dropped with it</td></tr>
+            <tr><td>Bytes queued for one subscriber</td><td class="mono">SSE_MAX_BUFFERED_BYTES</td><td>The subscriber is disconnected; it reconnects and resumes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The middle row is the one that is easy to miss. Retention bounds how much is kept <em>per session</em>, which reads like the whole answer and is half of it &mdash; every browser tab that ever connected is a session, and nothing bounded how many of those there were. Sweeping the hub alone would not have fixed it either: a hub is a <code>Set</code> and a timer handle, while the events are the memory, so the sweep drops the session's log too.</p>
+      <p>The third row is a design decision rather than a threshold. <code>res.write</code> returning <code>false</code> is <em>normal</em> &mdash; the socket buffer filled and Node took over queuing, which a healthy consumer drains in milliseconds &mdash; so the ceiling sits on the queue length, not on the return value. Otherwise an ordinary burst disconnects people.</p>
+    </div>
+
+    <div class="card ok">
       <div class="card-head"><span class="card-num">NODE + EXPRESS 5</span><span class="card-name">Five routes, one of which never ends</span></div>
       <p><code>GET /api/stream</code> is the long-lived one. <code>POST /api/threads</code> starts a detached run, <code>GET /api/threads</code> is the recovery snapshot, <code>POST /api/threads/:id/cancel</code> aborts a signal, <code>GET /api/health</code> reports which provider backs each capability.</p>
       <p>The detail that cost real debugging: an SSE endpoint <strong>must write a body byte immediately</strong>. <code>flushHeaders()</code> flushes your response, but an intermediary has its own, and Node will not put those headers on the wire until a body chunk exists &mdash; so <code>EventSource</code> sits in <code>CONNECTING</code> until the first heartbeat fifteen seconds later. See <a href="sse-hub.html">One Wire, Many Threads</a>.</p>
