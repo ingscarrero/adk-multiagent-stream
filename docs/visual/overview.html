@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt to Pixel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>Prompt to Pixel</h1>
+    <p class="standfirst">The whole solution on one page: the round trip a prompt takes, the seven packages and the line ADK never crosses, what a single thread looks like event by event, and what each part of the stack is there to demonstrate.</p>
+    <span class="filepath">the whole repo</span>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="event-stream.html">The Log Underneath</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a> &middot; <a href="evals.html">Trajectory Over Answer</a> &middot; <a href="e2e.html">No Sleeps, No Selectors</a></p>
+  </header>
+
+
+  <section>
+    <h2>In one paragraph</h2>
+    <p class="lede">Several AI agent threads stream at once over a single connection. Messages stay in order within each thread, every thread's status tracks its own lifecycle, and the whole thing &mdash; including the streaming &mdash; is tested without an API key.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>&nbsp;</th></tr></thead>
+        <tbody>
+          <tr><td><strong>The hard part</strong></td><td>Not "show a chatbot". Keeping <em>N</em> concurrent agent runs ordered, attributable and recoverable over one wire</td></tr>
+          <tr><td><strong>The transport</strong></td><td>One multiplexed SSE connection for the whole session, not one per thread</td></tr>
+          <tr><td><strong>The agents</strong></td><td><code>@google/adk</code> v2.0.0 &mdash; a router that transfers to specialists, and a pipeline that fans out in parallel then synthesises</td></tr>
+          <tr><td><strong>The trick that makes it testable</strong></td><td>A deterministic in-process model, so "the concatenated deltas equal the final text" is a reasonable assertion</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Prompt to pixel</h2>
+    <p class="lede">One prompt's complete round trip. The shape worth noticing is that it <em>is</em> a circuit: the request goes down and the answer comes back on a different path.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 500" role="img" aria-label="The full round trip as a circuit. In the browser, the composer posts to the threads endpoint and gets a thread id back immediately. On the server, the route starts a detached thread runner, which drives the ADK runner over the agent graph. Agent events come back up into the translator, which turns them into wire events, appends them to the event stream for an offset, and hands them to the session hub. The hub writes SSE frames up to the browser's EventSource, which dispatches into the reducer, which renders the thread card. The response to the POST and the events on the stream are two different paths.">
+          <defs><marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <!-- band labels -->
+          <text x="0" y="14" font-size="10.5" class="s-sub" letter-spacing="1.3">BROWSER &mdash; apps/web</text>
+          <line x1="0" y1="128" x2="940" y2="128" class="s-rule" stroke-width="1"/>
+          <text x="0" y="176" font-size="10.5" class="s-sub" letter-spacing="1.3">SERVER &mdash; apps/server</text>
+          <line x1="0" y1="316" x2="940" y2="316" class="s-rule" stroke-width="1"/>
+          <text x="0" y="360" font-size="10.5" class="s-sub" letter-spacing="1.3">AGENTS &mdash; packages/agents</text>
+
+          <!-- browser row -->
+          <rect x="0" y="26" width="150" height="60" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="14" y="48" font-size="11.5" class="s-accent-text">Composer</text>
+          <text x="14" y="68" font-size="10.5" class="s-mono">type + send</text>
+
+          <rect x="330" y="26" width="170" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="344" y="48" font-size="11.5" class="s-title">ThreadCard</text>
+          <text x="344" y="68" font-size="10.5" class="s-mono">text, status, tools</text>
+
+          <rect x="540" y="26" width="170" height="60" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="554" y="48" font-size="11.5" class="s-ok-text">feedReducer</text>
+          <text x="554" y="68" font-size="10.5" class="s-mono">pure: order, dedup, gaps</text>
+
+          <rect x="750" y="26" width="190" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="764" y="48" font-size="11.5" class="s-title">EventSource</text>
+          <text x="764" y="68" font-size="10.5" class="s-mono">one per session</text>
+
+          <!-- server row -->
+          <rect x="0" y="188" width="150" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="14" y="210" font-size="11.5" class="s-title">routes</text>
+          <text x="14" y="230" font-size="10.5" class="s-mono">app.ts</text>
+
+          <rect x="210" y="188" width="170" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="224" y="210" font-size="11.5" class="s-title">ThreadRunner</text>
+          <text x="224" y="230" font-size="10.5" class="s-mono">assigns seq</text>
+
+          <rect x="410" y="188" width="170" height="60" rx="7" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="424" y="210" font-size="11.5" class="s-warn-text">AdkEventTranslator</text>
+          <text x="424" y="230" font-size="10.5" class="s-mono">the only ADK seam</text>
+
+          <rect x="610" y="188" width="140" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="624" y="210" font-size="11.5" class="s-title">eventStream</text>
+          <text x="624" y="230" font-size="10.5" class="s-mono">append &rarr; offset</text>
+
+          <rect x="780" y="188" width="160" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="794" y="210" font-size="11.5" class="s-title">SessionHub</text>
+          <text x="794" y="230" font-size="10.5" class="s-mono">writes SSE frames</text>
+
+          <!-- agents row -->
+          <rect x="210" y="372" width="170" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="224" y="394" font-size="11.5" class="s-title">ADK Runner</text>
+          <text x="224" y="414" font-size="10.5" class="s-mono">runAsync(signal)</text>
+
+          <rect x="410" y="372" width="230" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="424" y="394" font-size="11.5" class="s-title">LlmAgent graph + tools</text>
+          <text x="424" y="414" font-size="10.5" class="s-mono">router | research pipeline</text>
+
+          <!-- 1. post -->
+          <path d="M52 86 L52 184" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="52" cy="120" r="9" class="s-accent-fill" stroke-width="1.2"/>
+          <text x="52" y="124" font-size="10" text-anchor="middle" class="s-accent-text">1</text>
+          <text x="66" y="152" font-size="10.5" class="s-mono">POST /api/threads</text>
+
+          <!-- 2. immediate 202 -->
+          <path d="M124 184 L124 90" class="s-dash" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="124" cy="120" r="9" class="s-warn-fill" stroke-width="1.2"/>
+          <text x="124" y="124" font-size="10" text-anchor="middle" class="s-warn-text">2</text>
+          <text x="138" y="112" font-size="10.5" class="s-warn-text">202, at once</text>
+
+          <!-- 3 -->
+          <path d="M150 218 L206 218" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="178" cy="170" r="9" class="s-box" stroke-width="1.2"/>
+          <text x="178" y="174" font-size="10" text-anchor="middle" class="s-title">3</text>
+          <text x="178" y="204" font-size="10" text-anchor="middle" class="s-sub">start()</text>
+
+          <!-- 4 down to agents -->
+          <path d="M262 248 L262 368" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="262" cy="308" r="9" class="s-box" stroke-width="1.2"/>
+          <text x="262" y="312" font-size="10" text-anchor="middle" class="s-title">4</text>
+          <text x="276" y="290" font-size="10.5" class="s-mono">detached run</text>
+
+          <!-- 5 -->
+          <path d="M380 402 L406 402" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="393" cy="358" r="9" class="s-box" stroke-width="1.2"/>
+          <text x="393" y="362" font-size="10" text-anchor="middle" class="s-title">5</text>
+          <text x="393" y="452" font-size="10" text-anchor="middle" class="s-sub">drives the graph</text>
+
+          <!-- 6 back up -->
+          <path d="M500 368 L500 252" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="500" cy="308" r="9" class="s-warn-fill" stroke-width="1.2"/>
+          <text x="500" y="312" font-size="10" text-anchor="middle" class="s-warn-text">6</text>
+          <text x="514" y="290" font-size="10.5" class="s-mono">ADK Event stream</text>
+
+          <!-- 7 -->
+          <path d="M580 218 L606 218" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="593" cy="170" r="9" class="s-box" stroke-width="1.2"/>
+          <text x="593" y="174" font-size="10" text-anchor="middle" class="s-title">7</text>
+          <text x="593" y="154" font-size="10" text-anchor="middle" class="s-sub">FeedEvent</text>
+
+          <!-- 8 -->
+          <path d="M750 218 L776 218" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="763" cy="170" r="9" class="s-box" stroke-width="1.2"/>
+          <text x="763" y="174" font-size="10" text-anchor="middle" class="s-title">8</text>
+          <text x="763" y="154" font-size="10" text-anchor="middle" class="s-sub">notify</text>
+
+          <!-- 9 up to browser -->
+          <path d="M880 184 L880 90" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="880" cy="140" r="9" class="s-ok-fill" stroke-width="1.2"/>
+          <text x="880" y="144" font-size="10" text-anchor="middle" class="s-ok-text">9</text>
+          <text x="866" y="116" font-size="10.5" text-anchor="end" class="s-mono">id: offset</text>
+
+          <!-- 10 -->
+          <path d="M746 56 L714 56" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="730" cy="104" r="9" class="s-ok-fill" stroke-width="1.2"/>
+          <text x="730" y="108" font-size="10" text-anchor="middle" class="s-ok-text">10</text>
+
+          <!-- 11 -->
+          <path d="M536 56 L504 56" class="s-line" stroke-width="1.6" marker-end="url(#ov-a)"/>
+          <circle cx="520" cy="104" r="9" class="s-ok-fill" stroke-width="1.2"/>
+          <text x="520" y="108" font-size="10" text-anchor="middle" class="s-ok-text">11</text>
+        </svg>
+      </div>
+      <figcaption>Steps 1 and 2 are the whole request. Everything from 3 onward happens after the browser already has its answer, and arrives on the stream instead.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="note-label">The one thing to take from this diagram</span>
+      <p><strong>The POST returns before any agent work happens.</strong> <code>POST /api/threads</code> answers <code>202</code> with a <code>threadId</code> and nothing else &mdash; the run is detached, and every observable consequence of it arrives later on the SSE connection, correlated by that id.</p>
+      <p>That split is what makes concurrency tractable. The request path has no long-lived state and cannot block; the stream is single-writer, which is what makes the ordering guarantees provable. The same shape covers cancellation: <code>POST /api/threads/:id/cancel</code> returns <code>202</code>/<code>409</code>/<code>404</code> for <em>accepted or not</em>, and the thread actually reaching <code>cancelled</code> is observed back on the stream.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Seven packages, and one line that matters</h2>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 920 350" role="img" aria-label="Package dependency graph. On the left of a dashed line sit apps/web, packages/protocol and the e2e suite, none of which import the ADK. On the right sit apps/server, packages/agents, packages/providers and packages/eval, all of which do. apps/web, apps/server and e2e all depend on packages/protocol, the shared wire contract, so that dependency crosses the line.">
+          <defs><marker id="ov-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <line x1="300" y1="8" x2="300" y2="342" class="s-dash" stroke-width="2"/>
+          <text x="288" y="22" font-size="11" text-anchor="end" class="s-ok-text">no @google/adk</text>
+          <text x="312" y="22" font-size="11" class="s-warn-text">imports @google/adk</text>
+
+          <rect x="0" y="46" width="250" height="66" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="70" font-size="12" class="s-ok-text">apps/web</text>
+          <text x="16" y="90" font-size="10.5" class="s-sub">React 19, the reducer, the hook</text>
+          <text x="16" y="106" font-size="10.5" class="s-sub">would survive replacing ADK entirely</text>
+
+          <rect x="0" y="196" width="250" height="66" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="220" font-size="12" class="s-ok-text">packages/protocol</text>
+          <text x="16" y="240" font-size="10.5" class="s-sub">zod wire schemas, status machine</text>
+          <text x="16" y="256" font-size="10.5" class="s-sub">the contract both halves agree on</text>
+
+          <rect x="350" y="46" width="230" height="66" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="366" y="70" font-size="12" class="s-title">apps/server</text>
+          <text x="366" y="90" font-size="10.5" class="s-sub">Express 5, SSE hub,</text>
+          <text x="366" y="106" font-size="10.5" class="s-sub">thread lifecycle, ADK adapter</text>
+
+          <rect x="650" y="46" width="270" height="66" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="666" y="70" font-size="12" class="s-title">packages/agents</text>
+          <text x="666" y="90" font-size="10.5" class="s-sub">the agent graph, tools,</text>
+          <text x="666" y="106" font-size="10.5" class="s-sub">ScriptedLlm, model resolution</text>
+
+          <rect x="650" y="162" width="270" height="66" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="666" y="186" font-size="12" class="s-title">packages/providers</text>
+          <text x="666" y="206" font-size="10.5" class="s-sub">ports + adapters: sessions,</text>
+          <text x="666" y="222" font-size="10.5" class="s-sub">knowledge, identity, eventStream</text>
+
+          <rect x="650" y="278" width="270" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="666" y="302" font-size="12" class="s-title">packages/eval</text>
+          <text x="666" y="322" font-size="10.5" class="s-sub">ADK-style evals (ADK ships Python only)</text>
+
+          <rect x="0" y="284" width="250" height="54" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="306" font-size="12" class="s-ok-text">e2e</text>
+          <text x="16" y="326" font-size="10.5" class="s-sub">Playwright specs, page objects</text>
+
+          <path d="M125 112 L125 192" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <text x="136" y="158" font-size="10.5" class="s-sub">wire types</text>
+          <path d="M125 284 L125 266" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+
+          <path d="M350 96 L262 210" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <text x="286" y="140" font-size="10.5" class="s-sub">the same wire types</text>
+
+          <path d="M580 68 L646 68" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <path d="M580 92 L620 92 L620 186 L646 186" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <path d="M785 112 L785 158" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <path d="M785 278 L785 232" class="s-line" stroke-width="1.5" marker-end="url(#ov-b)"/>
+          <text x="796" y="262" font-size="10.5" class="s-sub">grades the agents</text>
+        </svg>
+      </div>
+      <figcaption>The rule is not "ADK lives in one file" &mdash; it is imported in fourteen. The rule is that <strong>it never reaches the client</strong>, and <code>adk-adapter.ts</code> is the single place its events become wire events.</figcaption>
+    </figure>
+
+    <p>Three things fall out of that line, and they are the reason it is drawn where it is:</p>
+    <ul class="plain">
+      <li><strong>The reducer is testable with array literals.</strong> No framework, no network, no timers &mdash; which is why the ordering tests can afford to be exhaustive.</li>
+      <li><strong>Replacing ADK</strong> means rewriting the adapter and the agents package, and touching nothing a user can see.</li>
+      <li><strong>The UI cannot depend on an ADK detail</strong> by accident, because it cannot see one.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What one thread actually looks like</h2>
+    <p class="lede">"Where is my order, can you track shipping?" &mdash; 23 events, and every one of them is a rendering decision.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 250" role="img" aria-label="A timeline of one thread's twenty-three events. It opens with thread.created at sequence one and a running status. Then three tool round trips, each four events: tool.call, an awaiting_tool status, tool.result, and a running status. Then a streaming status, six message.delta events, one message.complete carrying the whole text, and a terminal complete status. A status track underneath shows the lifecycle moving through queued, running, awaiting_tool, streaming and complete.">
+          <text x="0" y="16" font-size="10.5" class="s-sub" letter-spacing="1.2">EVENTS &mdash; seq 1 to 23, per thread</text>
+
+          <rect x="0" y="30" width="86" height="52" rx="6" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="43" y="52" font-size="10.5" text-anchor="middle" class="s-accent-text">created</text>
+          <text x="43" y="70" font-size="10" text-anchor="middle" class="s-mono">seq 1</text>
+
+          <rect x="94" y="30" width="72" height="52" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="130" y="52" font-size="10.5" text-anchor="middle" class="s-title">status</text>
+          <text x="130" y="70" font-size="10" text-anchor="middle" class="s-mono">seq 2</text>
+
+          <rect x="174" y="30" width="330" height="52" rx="6" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="339" y="50" font-size="10.5" text-anchor="middle" class="s-warn-text">3 tool round trips &mdash; 4 events each</text>
+          <text x="339" y="68" font-size="10" text-anchor="middle" class="s-mono">call &middot; awaiting_tool &middot; result &middot; running &mdash; seq 3-14</text>
+
+          <rect x="512" y="30" width="72" height="52" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="548" y="52" font-size="10.5" text-anchor="middle" class="s-title">status</text>
+          <text x="548" y="70" font-size="10" text-anchor="middle" class="s-mono">seq 15</text>
+
+          <rect x="592" y="30" width="180" height="52" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="682" y="50" font-size="10.5" text-anchor="middle" class="s-ok-text">6 &times; message.delta</text>
+          <text x="682" y="68" font-size="10" text-anchor="middle" class="s-mono">17 words / 3 &mdash; seq 16-21</text>
+
+          <rect x="780" y="30" width="86" height="52" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="823" y="50" font-size="10.5" text-anchor="middle" class="s-ok-text">complete</text>
+          <text x="823" y="68" font-size="10" text-anchor="middle" class="s-mono">seq 22</text>
+
+          <rect x="874" y="30" width="66" height="52" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="907" y="52" font-size="10.5" text-anchor="middle" class="s-title">status</text>
+          <text x="907" y="70" font-size="10" text-anchor="middle" class="s-mono">seq 23</text>
+
+          <text x="0" y="118" font-size="10.5" class="s-sub" letter-spacing="1.2">STATUS TRACK</text>
+          <rect x="0" y="130" width="94" height="26" rx="5" class="s-box" stroke-width="1.2"/>
+          <text x="47" y="147" font-size="10" text-anchor="middle" class="s-sub">queued</text>
+          <rect x="98" y="130" width="72" height="26" rx="5" class="s-box" stroke-width="1.2"/>
+          <text x="134" y="147" font-size="10" text-anchor="middle" class="s-sub">running</text>
+          <rect x="174" y="130" width="330" height="26" rx="5" class="s-warn-fill" stroke-width="1.2"/>
+          <text x="339" y="147" font-size="10" text-anchor="middle" class="s-warn-text">awaiting_tool &harr; running, three times</text>
+          <rect x="508" y="130" width="362" height="26" rx="5" class="s-ok-fill" stroke-width="1.2"/>
+          <text x="689" y="147" font-size="10" text-anchor="middle" class="s-ok-text">streaming &mdash; still streaming while message.complete lands</text>
+          <rect x="874" y="130" width="66" height="26" rx="5" class="s-accent-fill" stroke-width="1.2"/>
+          <text x="907" y="147" font-size="10" text-anchor="middle" class="s-accent-text">complete</text>
+
+          <text x="0" y="192" font-size="11" class="s-title">events = 5 + 4T + ceil(W / 3)</text>
+          <text x="0" y="212" font-size="10.5" class="s-sub">5 fixed &middot; 4 per tool round trip &middot; one delta per three words. T=3, W=17 gives 23.</text>
+          <text x="0" y="232" font-size="10.5" class="s-sub">10 for a no-tool answer, 42 for the research pipeline. Under Gemini the delta count is the API's, not ours.</text>
+        </svg>
+      </div>
+      <figcaption>Two events carry text: the deltas, and one <code>message.complete</code> holding the whole thing. The complete is authoritative &mdash; <strong>replace, do not append</strong> &mdash; which makes a lost delta self-healing rather than permanent corruption.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What each area of the stack demonstrates</h2>
+    <p class="lede">Where to look, per technology, and the non-obvious thing in each.</p>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">REACT 19</span><span class="card-name">Ordering logic lives in a pure reducer, not in components</span></div>
+      <p><code>apps/web/src/feed/</code> &mdash; <code>reducer.ts</code>, <code>useFeedStream.ts</code>, <code>ThreadCard.tsx</code>, <code>MessageBubble.tsx</code>, <code>ToolStep.tsx</code>, <code>Composer.tsx</code>, <code>StatusChip.tsx</code>.</p>
+      <p>The reducer is a pure function over a <code>FeedEvent</code>, so every hazard a real stream produces &mdash; out-of-order frames, duplicates after reconnect, gaps that never close, two agents interleaving &mdash; is an array literal in a test rather than a browser race. The hook owns the connection and nothing else; the components are presentational. See <a href="reducer-gates.html">Four Gates and a Drain</a>.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">NODE + EXPRESS 5</span><span class="card-name">Five routes, one of which never ends</span></div>
+      <p><code>GET /api/stream</code> is the long-lived one. <code>POST /api/threads</code> starts a detached run, <code>GET /api/threads</code> is the recovery snapshot, <code>POST /api/threads/:id/cancel</code> aborts a signal, <code>GET /api/health</code> reports which provider backs each capability.</p>
+      <p>The detail that cost real debugging: an SSE endpoint <strong>must write a body byte immediately</strong>. <code>flushHeaders()</code> flushes your response, but an intermediary has its own, and Node will not put those headers on the wire until a body chunk exists &mdash; so <code>EventSource</code> sits in <code>CONNECTING</code> until the first heartbeat fifteen seconds later. See <a href="sse-hub.html">One Wire, Many Threads</a>.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">PLAYWRIGHT</span><span class="card-name">63 runs, zero fixed sleeps, and a project for the untestable case</span></div>
+      <p>Three projects over four servers. Chromium and Firefox run against the default pair; <code>recovery</code> runs against a second server with a 40-event retention, because a replay-buffer overrun on the 500-event default needs about twenty-five prompts and is therefore never tested by accident.</p>
+      <p>That fourth layer exists because three unit layers were green while the recovery feature was broken, three separate times. See <a href="e2e.html">No Sleeps, No Selectors</a>.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">CONVERSATIONAL UX</span><span class="card-name">The decisions a chat feed gets judged on</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Thread appears before the model produces anything</td><td>A prompt that vanishes for two seconds reads as broken</td></tr>
+            <tr><td>Tool calls render inline, arguments and results expandable</td><td>The agent's reasoning is the product, not an implementation detail</td></tr>
+            <tr><td>The author changes mid-stream on transfer</td><td>Re-attribute without starting a new thread</td></tr>
+            <tr><td>Streaming prose is <strong>not</strong> a live region</td><td>Announcing every token is conformant and unusable. Status is announced; text is not</td></tr>
+            <tr><td>Stop is per thread</td><td>Cancelling one leaves the others untouched</td></tr>
+            <tr><td>Lost history says so, in two different wordings</td><td><em>"Earlier messages were lost"</em> when some survived, <em>"no longer available"</em> when none did</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">GOOGLE ADK</span><span class="card-name">Two agent shapes, chosen to stress a feed differently</span></div>
+      <p><strong>router</strong> &mdash; one thread whose author changes mid-stream via <code>transfer_to_agent</code>. <strong>research</strong> &mdash; two agents emitting <em>interleaved</em> partial text on one invocation, then a synthesiser. The second is the case that breaks naive feeds: without a per-thread <code>seq</code> and a per-author <code>messageId</code>, two agents streaming at once produce one scrambled message.</p>
+      <p>Four v2.0.0 behaviours are pinned by named regression tests: <code>transfer_to_agent</code> takes <code>agentName</code> not <code>agent_name</code> (the wrong spelling is a silent no-op); transfer rewrites history into synthetic <code>"For context:"</code> user messages; <code>StreamingMode.BIDI</code> throws; and <code>SequentialAgent</code>/<code>ParallelAgent</code> are deprecated in favour of a <code>Workflow</code> API that cannot yet be an <code>LlmAgent</code> sub-agent. See <a href="adk-adapter.html">Many Authors, One Feed</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The three decisions worth defending</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Decision</th><th>The alternative</th><th>Why this one</th></tr></thead>
+        <tbody>
+          <tr><td><strong>One multiplexed SSE connection</strong></td><td>One stream per thread</td><td>Browsers allow six concurrent HTTP/1.1 connections per origin. Per-thread streams hang at the seventh &mdash; only under concurrency, which is the condition a demo misses and production hits</td></tr>
+          <tr><td><strong>A deterministic in-process model</strong></td><td>Test against the real API</td><td>Timing tests against a live LLM are re-runs and hope. This is what makes "the concatenated deltas equal the final text" assertable</td></tr>
+          <tr><td><strong>The browser never sees ADK</strong></td><td>Share types from the framework</td><td>The reducer stays testable with array literals, and the wire contract survives replacing the agent runtime</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="note-label">The one to raise before you are asked</span>
+      <p><strong>The event log is also the message store.</strong> There is nowhere else agent messages exist, so history expires with the retention window rather than being kept. Everything that feels wrong about recovery follows from that single conflation: a snapshot that returns identity and no messages, and a long session degrading into unreadable threads.</p>
+      <p>It is written down as <a href="../LIMITATIONS.md">L7</a> and <a href="../LIMITATIONS.md">L16</a>, the fix is scoped &mdash; a <code>messageStore</code> port written at settle points only &mdash; and the reasoning for why persisting the log is <em>not</em> the fix is in <a href="architecture.html">The Substrate Line</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>At a glance</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>&nbsp;</th><th class="mono">Count</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Packages</td><td class="mono">7</td><td>Consumed as TypeScript source &mdash; no build step between them</td></tr>
+          <tr><td>Unit + integration tests</td><td class="mono">217</td><td>Protocol, reducer, components, adapter, HTTP/SSE, providers, evals</td></tr>
+          <tr><td>Browser tests</td><td class="mono">63</td><td>Chromium 34, Firefox 25, recovery 4</td></tr>
+          <tr><td>Eval cases</td><td class="mono">6</td><td>Run as a CLI and inside <code>pnpm test</code>, so they gate</td></tr>
+          <tr><td>Status transitions asserted</td><td class="mono">64</td><td>Every <code>(from, to)</code> pair, against an independently written table</td></tr>
+          <tr><td>Recorded limitations</td><td class="mono">16</td><td>Two fixed and kept struck through, because the reasoning outlives the list</td></tr>
+          <tr><td>External services required</td><td class="mono">0</td><td><code>pnpm install &amp;&amp; pnpm dev</code>. No key, no container</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where to go next</h2>
+    <p class="lede">The rest of this set, in the order that builds on itself.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Read</th><th>For</th></tr></thead>
+        <tbody>
+          <tr><td><a href="architecture.html">The Substrate Line</a></td><td>The whole system, and the line between logic this repo implements and infrastructure it stands in for</td></tr>
+          <tr><td><a href="sse-hub.html">One Wire, Many Threads</a></td><td>Multiplexing, the two counters, and the resync exchange frame by frame</td></tr>
+          <tr><td><a href="reducer-gates.html">Four Gates and a Drain</a></td><td>How the client survives duplicates, gaps and replays</td></tr>
+          <tr><td><a href="adk-adapter.html">Many Authors, One Feed</a></td><td>The ADK seam, and who owns status</td></tr>
+          <tr><td><a href="thread-runner.html">Start, Stream, Settle</a></td><td>Detached runs and the terminal guarantee</td></tr>
+          <tr><td><a href="event-stream.html">The Log Underneath</a></td><td>The append-only log, and which parts of stream systems this actually uses</td></tr>
+          <tr><td><a href="scripted-llm.html">A Model That Never Changes Its Mind</a></td><td>Why the tests can assert on streaming at all</td></tr>
+          <tr><td><a href="evals.html">Trajectory Over Answer</a></td><td>Grading the agent rather than the code</td></tr>
+          <tr><td><a href="e2e.html">No Sleeps, No Selectors</a></td><td>The browser suite, and the layer that caught what three green layers missed</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of ten visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

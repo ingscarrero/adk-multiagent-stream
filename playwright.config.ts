@@ -43,9 +43,11 @@ export default defineConfig({
       // Recovery needs a server with a small replay buffer; it has its own project.
       testIgnore: /recovery\.spec\.ts/,
     },
-    // Firefox and WebKit are wired up but skipped by default to keep the local
-    // loop fast; enable with `--project=firefox`. `EventSource` behaviour
-    // differs subtly between engines, so it is worth running before shipping.
+    // Firefox runs by default alongside Chromium: `EventSource` retry behaviour
+    // differs between engines, and that difference has already produced a real
+    // bug here (Firefox parks a failed stream in CLOSED and never retries). It
+    // skips a11y because those axe rules are engine-independent, so running
+    // them twice buys wall-clock and nothing else. WebKit is not wired up.
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
@@ -67,10 +69,25 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * Scripted streaming is slowed for the browser suite only.
+   *
+   * At the 25ms default a research thread is finished about a second after it
+   * starts, and the cancellation specs have to get from "the first message is
+   * visible" to "the Stop click landed" inside that window. A loaded CI runner
+   * does not, so Stop unmounts mid-click and Playwright reports a detached
+   * element thirty seconds later. Slowing the stream widens the window instead
+   * of papering over it with a retry.
+   *
+   * The cost is a couple of seconds across the whole suite; CI wall-clock here
+   * is dominated by installing browsers, not by streaming. Unit tests are
+   * unaffected -- they never start a server.
+   */
   webServer: [
     {
       command: 'pnpm --filter @feed/server start:test',
       port: 3001,
+      env: { SCRIPTED_CHUNK_DELAY_MS: '60' },
       reuseExistingServer: !CI,
       stdout: 'ignore',
       stderr: 'pipe',
@@ -86,6 +103,7 @@ export default defineConfig({
     {
       command: 'pnpm --filter @feed/server dev:recovery',
       port: 3002,
+      env: { SCRIPTED_CHUNK_DELAY_MS: '60' },
       reuseExistingServer: !CI,
       stdout: 'ignore',
       stderr: 'pipe',

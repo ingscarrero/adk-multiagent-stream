@@ -71,7 +71,7 @@ Index and conventions in **[docs/](docs/README.md)**.
 | **[docs/TESTING.md](docs/TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
 | **[docs/PROVIDERS.md](docs/PROVIDERS.md)** | Emulated versus real: what stands in for Kafka, a vector DB, a session store, an identity provider — and where each seam is. |
-| **[docs/visual/](docs/README.md)** | Seven illustrated deep-dives: the architecture and substrate boundary, the event log the feed is built on, then the reducer's gates, the ADK adapter, the SSE hub, the thread runner, and the deterministic model. |
+| **[docs/visual/](docs/visual/overview.html)** | Ten illustrated deep-dives, starting with **[Prompt to Pixel](docs/visual/overview.html)** — the whole solution on one page. Then the substrate boundary, the event log, the reducer's gates, the ADK adapter, the SSE hub, the thread runner, the deterministic model, the agent evals, and the browser suite. |
 
 Every source file opens with a docblock explaining what it owns and why it is
 shaped that way. The interesting reasoning is next to the code, not here.
@@ -223,7 +223,8 @@ Everything is optional. See [`.env.example`](.env.example).
 | `GEMINI_MODEL` | `gemini-2.5-flash` | |
 | `PORT` | `3001` | Pinned to 3001 by `pnpm dev`, so an inherited `PORT` can't move the API onto the web app's port |
 | `SSE_HEARTBEAT_MS` | `15000` | Keeps idle proxies from closing the stream |
-| `SSE_REPLAY_BUFFER` | `500` | Events retained per session for reconnect |
+| `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
+| `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` | `memory` / `keyword` / `trusted-header` / `memory` | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 
 ## Known limits
 
@@ -234,8 +235,10 @@ Every one of these is recorded with its cause, blast radius, and fix in
   memory without bound ([L2](docs/LIMITATIONS.md#l2)).
 - **Session hubs are never evicted** — bounded per session, unbounded in
   sessions ([L3](docs/LIMITATIONS.md#l3)).
-- **In-memory everything** — sessions, threads, replay buffers
-  ([L7](docs/LIMITATIONS.md#l7)).
+- **No message store** — the event log is the only place messages exist, so a
+  transcript expires with the retention window rather than being kept
+  ([L7](docs/LIMITATIONS.md#l7), [L16](docs/LIMITATIONS.md#l16)). This is the
+  one architectural conflation in the repo and the next thing to fix.
 - **Single instance, no auth, no virtualisation**
   ([L8](docs/LIMITATIONS.md#l8)–[L10](docs/LIMITATIONS.md#l10)).
 - **A thread takes one prompt** — no follow-up messages yet

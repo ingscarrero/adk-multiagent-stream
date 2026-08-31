@@ -28,11 +28,18 @@ named as such.
 | | |
 |---|---|
 | **Ports built** | `sessions`, `knowledge`, `identity`, `eventStream` |
-| **Catalogued, no port yet** | none |
+| **Capability with no port at all** | `messageStore` — see below, and [L7](LIMITATIONS.md#l7) |
 | **Real adapters built** | `model` → Gemini. The rest fail at startup with *"catalogued but not implemented yet"* |
 
-Everything runs emulated today. The ports exist so the real adapters are a
-config change rather than a refactor; they land next.
+Everything else runs emulated today. The ports exist so the real adapters are a
+config change rather than a refactor.
+
+**`messageStore` is a different kind of gap from the others.** Every row in the
+matrix below is a real capability with an emulated adapter — swap the adapter
+and the code around it does not change. A message store is not emulated here; it
+is *absent*, and the event log is standing in for it. That is the one place
+where the substitution test fails, because there is no adapter to swap. It is
+[the next thing to build](ARCHITECTURE.md#the-log-and-the-store-two-jobs-one-of-them-unfilled).
 
 ## The matrix
 
@@ -82,7 +89,7 @@ Named so they are not mistaken for something that exists:
 
 | Capability | What a real system would use | Status |
 |---|---|---|
-| **Message/transcript store** | Postgres, DynamoDB | **absent.** The replay buffer is the only place agent messages exist ([L7](LIMITATIONS.md#l7)) |
+| **Message/transcript store** | Postgres, DynamoDB | **absent.** The event log is the only place agent messages exist ([L7](LIMITATIONS.md#l7)). Not emulated — missing |
 | Telemetry / tracing | OpenTelemetry → GCP or Datadog; ADK ships `@google/adk/telemetry/gcp` | not wired |
 | Artifacts / blobs | GCS; ADK ships `@google/adk/artifacts/gcs` | unused |
 | Long-term memory | Vertex AI Memory Bank | unused |
@@ -122,14 +129,26 @@ why it is first on the list to get a genuine adapter.
 
 ## Running against real providers
 
-Containers are Podman (rootless, no daemon):
+**Not yet possible.** `MODEL_MODE=gemini` is the only real adapter that exists;
+every other capability fails at startup with *"catalogued but not implemented
+yet"* if you switch it. There is no `compose.yaml` and no `infra:up` script.
 
-```bash
-podman machine start          # macOS only, first time: podman machine init
-pnpm infra:up                 # postgres + pgvector, redis
-pnpm dev:real                 # every provider switched to its real adapter
-pnpm infra:down
-```
+This section previously described `pnpm infra:up` and `pnpm dev:real` as though
+they worked. They never did — the plan was written in the present tense. It is
+the same failure the [rule at the top of LIMITATIONS.md](LIMITATIONS.md#the-rule-this-file-exists-to-enforce)
+exists to prevent, found by auditing these documents against the repo.
 
-`compose.yaml` follows the Compose Spec, so `docker compose` works too if that
-is what you have.
+The plan, stated as a plan:
+
+| Step | Contents |
+|---|---|
+| `compose.yaml` | Podman-first (rootless, no daemon), fully-qualified images: `docker.io/pgvector/pgvector:pg17`, `docker.io/library/redis:7-alpine`. Compose Spec, so `docker compose` works too |
+| `pnpm infra:up` / `infra:down` | wrap `podman compose` |
+| `pnpm dev:real` | every capability switched to its real adapter at once |
+
+Adapter order, and the reasoning: **messageStore** first, because it is the one
+missing *capability* rather than a missing implementation of an existing one
+([L7](LIMITATIONS.md#l7)); then **sessions**, which shares its Postgres;
+then **knowledge**, the emulation most easily mistaken for the real thing;
+then **eventStream**, which buys multi-instance;
+then **identity**, which needs a client change as well as a server one.

@@ -221,7 +221,7 @@ uses:
 So the retained window is somewhere between roughly `buffer / 42` and
 `buffer / 10` threads depending on what you ask. Using 23:
 
-| `SSE_REPLAY_BUFFER` | threads it holds | after 6 threads, a reload restores |
+| `EVENT_RETENTION` | threads it holds | after 6 threads, a reload restores |
 |---|---|---|
 | 40 (`dev:recovery` default) | ~1.7 | 1 full, 1 partial, 4 unavailable |
 | 100 | ~4.3 | 4 full, 1 partial, 1 unavailable |
@@ -239,7 +239,7 @@ The formula's *shape* survives, but only one of its three terms is ours:
 |---|---|---|
 | **5** fixed | structural | **unchanged** — the adapter and runner emit these regardless of model |
 | **4T** | scripted, 0&ndash;3 | same four events per round trip, but `T` is the *model's* choice. Bounded only by `maxLlmCalls: 20`, so the worst case is ~5 + 76 + D |
-| **D** deltas | `ceil(W / 3)` | **not predictable.** ADK yields one `partial` per non-empty text delta the API streams (`interactions_utils.ts`), so `D` is Gemini's server-side chunking, one-to-one |
+| **D** deltas | `ceil(W / 3)` | **not predictable.** ADK yields one `partial` per non-empty text delta the API streams (`interactions_utils.js`), so `D` is Gemini's server-side chunking, one-to-one |
 
 `wordsPerChunk: 3` is a `ScriptedLlm` parameter. It approximates streaming for
 testing; it is not a prediction of how Gemini chunks. So `D` &mdash; and with it
@@ -257,7 +257,7 @@ curl -s 'http://localhost:3001/api/threads?sessionId=S' \
 
 Two things follow, and neither has been checked here because it needs a key:
 
-- **`SSE_REPLAY_BUFFER: 500` was sized against scripted behaviour.** If Gemini
+- **`EVENT_RETENTION: 500` was sized against scripted behaviour.** If Gemini
   emits several times as many deltas per answer, the readable window shrinks by
   the same factor and the default is wrong for production.
 - **`maxLlmCalls: 20` is the only bound on `T`.** A model that loops through
@@ -269,7 +269,7 @@ stays true as you add more — the window slides. That is the buffer working, no
 a fault. Dial it to taste:
 
 ```bash
-SSE_REPLAY_BUFFER=120 pnpm dev:recovery   # ~5 threads retained
+EVENT_RETENTION=120 pnpm dev:recovery   # ~5 threads retained
 ```
 
 The steady state it produces — a feed that grows without bound while only its
@@ -315,7 +315,7 @@ feature stayed broken:
 
 | Layer | File | What it proves |
 |---|---|---|
-| Server | `apps/server/src/stream.test.ts` | With a tiny `replayBufferSize`, an unreachable resume point emits `event: resync`; resuming at `from - 1` stops it repeating; `GET /api/threads` carries each thread's `lastSeq` |
+| Server | `apps/server/src/stream.test.ts` | With a tiny `eventRetention`, an unreachable resume point emits `event: resync`; resuming at `from - 1` stops it repeating; `GET /api/threads` carries each thread's `lastSeq` |
 | Reducer | `apps/web/src/feed/reducer.test.ts` | A `resync` rebuilds missing threads *without* a watermark, so a replay that still holds the thread restores it whole |
 | Hook | `apps/web/src/feed/useFeedStream.test.ts` | The frame triggers a snapshot fetch and exactly one reconnect, at the named offset |
 | **Browser** | `e2e/specs/recovery.spec.ts` | All of the above, through the real stack, against a 40-event buffer |

@@ -16,12 +16,14 @@ Long-form pages for mechanisms that a diagram explains faster than prose. Open
 them straight from the filesystem — each is one self-contained HTML file with no
 build step, no bundler, and no assets beyond a Google Fonts link.
 
-Two overviews, then one page per load-bearing file. Each opens with the mechanism, then the details
+One orientation page, two overviews, one page per load-bearing file, then two
+on how the thing is verified. Each opens with the mechanism, then the details
 that are easy to get wrong, then a short set of trace-it-yourself questions.
-Every page links to the other six, so the set reads in any order.
+Every page links to the other nine, so the set reads in any order.
 
 | Page | File it explains |
 |---|---|
+| **[visual/overview.html](visual/overview.html)**<br>*Prompt to Pixel* | the whole repo — the round trip a prompt takes, the seven packages and the line ADK never crosses, what one thread looks like event by event, and what each part of the stack demonstrates. **New here? Start with this one.** |
 | **[visual/architecture.html](visual/architecture.html)**<br>*The Substrate Line* | the system as a whole — the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for. **Start here.** |
 | **[visual/event-stream.html](visual/event-stream.html)**<br>*The Log Underneath* | `packages/providers/src/eventstream` — the append-only log the feed is built on: which parts of stream systems it uses, the in-process adapter, and what the Redis one will and will not fix |
 | **[visual/reducer-gates.html](visual/reducer-gates.html)**<br>*Four Gates and a Drain* | `apps/web/src/feed/reducer.ts` — the three outcomes, the four gates, the drain loop, eight worked traces including resync recovery |
@@ -29,6 +31,8 @@ Every page links to the other six, so the set reads in any order.
 | **[visual/sse-hub.html](visual/sse-hub.html)**<br>*One Wire, Many Threads* | `apps/server/src/sse.ts` — multiplexing, the two counters, the priming frame, and the resync exchange frame by frame |
 | **[visual/thread-runner.html](visual/thread-runner.html)**<br>*Start, Stream, Settle* | `apps/server/src/thread-runner.ts` — detached runs, single-point sequencing, the terminal guarantee, the resync snapshot |
 | **[visual/scripted-llm.html](visual/scripted-llm.html)**<br>*A Model That Never Changes Its Mind* | `packages/agents/src/scripted-llm.ts` — determinism, turn recovery, three ADK traps |
+| **[visual/evals.html](visual/evals.html)**<br>*Trajectory Over Answer* | `packages/eval/` — why trajectory is scored strictly and wording loosely, the two filters over one event list, ROUGE-1 F1 and its honest limit |
+| **[visual/e2e.html](visual/e2e.html)**<br>*No Sleeps, No Selectors* | `e2e/` + `playwright.config.ts` — the two rules, three projects over four servers, and the layer that caught what three green layers missed |
 
 ---
 
@@ -60,11 +64,11 @@ custom properties, and diagrams are hand-authored inline SVG using those tokens
 `<svg>` carries an `aria-label` stating what it shows, because a diagram that
 only works visually documents the mechanism for some readers and not others.
 
-**Each page is self-contained, and the duplicated CSS is deliberate.** The five
+**Each page is self-contained, and the duplicated CSS is deliberate.** The ten
 pages share a palette and type scale by copy, not by a shared stylesheet. That
 way any one of them can be opened straight from disk, emailed, or published as a
 standalone artifact with no assets to carry. The cost is that a palette change
-touches five files; the benefit is that a page is never half-broken because
+touches ten files; the benefit is that a page is never half-broken because
 something next to it moved.
 
 **Pages go stale; the code does not.** Each page says so in its own footer. Where

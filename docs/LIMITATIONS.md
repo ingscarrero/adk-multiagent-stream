@@ -30,7 +30,7 @@ tidy list.
 | [L4](#l4) | A thread cannot take a follow-up message | Scope | M |
 | [L5](#l5) | `awaiting_input` is unreachable | Scope | M |
 | [L6](#l6) | No responsive breakpoints or mobile tests | Scope | S |
-| [L7](#l7) | Everything is in memory | Production | S |
+| [L7](#l7) | **No message store**; everything is in memory | **Production** | M |
 | [L8](#l8) | Single instance only | Production | L |
 | [L9](#l9) | No authentication on the stream | Production | M |
 | [L10](#l10) | The feed is not virtualised | Production | M |
@@ -40,6 +40,9 @@ tidy list.
 | [L14](#l14) | Counters are tracked but never surfaced | Observability | S |
 | [L15](#l15) | ADK is deprecating the agents we compose with | Dependency | M |
 | [L16](#l16) | A resynced feed can be mostly empty threads | UX | S |
+
+[L7](#l7) and [L16](#l16) are the same problem seen twice — once from the
+architecture, once from the screen. They are the pair to read first.
 
 Test-coverage gaps are listed separately in [TESTING.md](TESTING.md#what-is-not-tested).
 
@@ -65,12 +68,15 @@ with no error and nothing in the UI to indicate anything was missing.
    its current `lastSeq` ([`app.ts`](../apps/server/src/app.ts),
    `ThreadRunner.summaries`).
 3. The client tears the stream down, fetches the snapshot, dispatches a `resync`
-   action, and reconnects **without** `lastEventId` so the server replays
-   everything it still holds
+   action, and reconnects at `from - 1` — the offset the notice named — so the
+   server replays everything it still holds
    ([`useFeedStream.ts`](../apps/web/src/feed/useFeedStream.ts)).
-4. The reducer rebuilds missing threads and adopts the snapshot's `lastSeq`, so
-   the next live event is contiguous instead of an unbridgeable gap
-   ([`reducer.ts`](../apps/web/src/feed/reducer.ts), `applyResync`).
+4. The reducer rebuilds missing threads as shells marked `awaitingResume`, which
+   accept the next event wherever its `seq` lands rather than seeking to a
+   watermark ([`reducer.ts`](../apps/web/src/feed/reducer.ts), `applyResync`).
+
+   Both of those clauses are load-bearing, and both were wrong first. The two
+   paragraphs below are why.
 
 **The snapshot is not a watermark, and treating it as one destroyed history.**
 The obvious reading of `lastSeq` is "the server is at 47, so start there". That
@@ -127,7 +133,8 @@ broken — which is exactly how it stayed broken.
 
 ### L2 — No per-subscriber backpressure {#l2}
 
-**Where** — [`sse.ts:73`](../apps/server/src/sse.ts), `subscriber.write(frame)`.
+**Where** — [`sse.ts:107`](../apps/server/src/sse.ts), the `onEntry` callback
+handed to `stream.open`, and the replay loop just below it.
 
 The return value is discarded. Node returns `false` when the socket buffer is
 full and then queues writes in memory without bound.
@@ -141,17 +148,19 @@ honoured end to end ([L1](#l1)), so this is unblocked.
 
 ### L3 — Session hubs are never evicted {#l3}
 
-**Where** — `HubRegistry.get` at [`sse.ts:196`](../apps/server/src/sse.ts).
+**Where** — `HubRegistry.get` at [`sse.ts:204`](../apps/server/src/sse.ts).
 
 Hubs are created on demand and only ever removed by `closeAll()` at shutdown.
 
 **Impact.** Every distinct `sessionId` — every browser tab, ever — leaves a
-permanent hub holding up to 500 events. Memory grows monotonically with unique
-visitors. The buffer is bounded per session; the number of sessions is not,
-which is the wrong half to have bounded.
+permanent hub, and a permanent per-session log in the `eventStream` provider
+holding up to `EVENT_RETENTION` events. Memory grows monotonically with unique
+visitors. Retention is bounded per session; the number of sessions is not, which
+is the wrong half to have bounded.
 
 **Fix.** Record a last-activity timestamp per hub and sweep hubs that are idle
-with no subscribers.
+with no subscribers. The sweep must close the stream subscription too, not just
+drop the hub — otherwise the listener stays registered against the log.
 
 ---
 
@@ -169,7 +178,7 @@ concurrent *threads*, and every ordering property it demonstrates is per-thread
 and holds regardless of turn count.
 
 **What already exists.** Each thread owns its own ADK session
-([`thread-runner.ts:173`](../apps/server/src/thread-runner.ts)), and ADK
+([`thread-runner.ts:228`](../apps/server/src/thread-runner.ts)), and ADK
 accumulates conversation history in it, so the agent side is ready.
 
 **Fix.** `POST /api/threads/:id/messages` reusing that session, a
@@ -198,22 +207,50 @@ defaults, not by design.
 
 Fine for a boilerplate. Each would be a blocker for a real deployment.
 
-### L7 — Everything is in memory {#l7}
+### L7 — There is no message store, and everything is in memory {#l7}
 
-Sessions, thread records, and replay buffers all live in process and vanish on
-restart.
+Two problems wear one number, and the second is the interesting one.
 
-The agent half now has a seam: `PROVIDER_SESSIONS` selects the session store and
-`ThreadRunner` takes a `BaseSessionService` rather than constructing one, so
-ADK's `DatabaseSessionService` is a config change ([PROVIDERS.md](PROVIDERS.md)).
-The adapter itself is not written yet, and the thread registry and replay buffer
-are separate stores that have no seam at all — see [L16](#l16).
+**Nothing survives a restart.** Sessions, thread records and the event log all
+live in process. Each now has a port — `PROVIDER_SESSIONS` selects the session
+store and `ThreadRunner` takes a `BaseSessionService` rather than constructing
+one; `PROVIDER_EVENTSTREAM` selects the log — so each real adapter is a config
+change rather than a refactor ([PROVIDERS.md](PROVIDERS.md)). None of the real
+adapters is written yet. The thread registry is the one store with no seam at
+all.
+
+**More importantly, the event log is doing a job it is the wrong shape for.**
+There is nowhere else agent messages exist, so the retention window is also the
+lifetime of the conversation. Every symptom of that is user-visible: a snapshot
+that returns identity and no messages, *"Messages for this thread are no longer
+available"*, and a long session degrading into unreadable history
+([L16](#l16)).
+
+A log answers *what happened next* over a window. A transcript is *state read by
+key, kept indefinitely*. Persisting the log — a Redis adapter — does not fix
+this; it makes the same wrong-shaped store durable and multi-instance.
+`docs/ARCHITECTURE.md` has the full argument and the division of labour.
+
+**Fix.** A `messageStore` port written at settle points only — `message.complete`,
+tool calls and results, status transitions — never `message.delta`, which is a
+transport artefact worth nothing once the message closes. That is roughly five
+writes per thread instead of twenty-three. The store becomes truth and the
+stream is demoted to liveness; `resync` keeps its whole shape and starts
+returning messages instead of an apology. This closes [L16](#l16) outright and
+is the next thing to build.
 
 ### L8 — Single instance only {#l8}
 
-One process owns a session's hub. A reconnect routed to a different instance
-finds an empty buffer and gets no replay, so this fails *silently* rather than
-loudly. Needs sticky sessions, or a shared pub/sub hub.
+One process owns a session's log and its subscribers. A reconnect routed to a
+different instance finds an empty log and gets no replay, so this fails
+*silently* rather than loudly.
+
+The seam exists — `PROVIDER_EVENTSTREAM` — and a Redis Streams adapter behind it
+is what makes the deployment horizontal; sticky sessions are the alternative
+that avoids the problem rather than solving it. Only the memory adapter is
+written. The planned adapter, and the one genuine obstacle in it (Redis stream
+ids are not integers, and `from - 1` arithmetic is load-bearing), are in
+[visual/event-stream.html](visual/event-stream.html).
 
 ### L9 — No authentication on the stream {#l9}
 
@@ -239,8 +276,9 @@ Both are deliberate trades, recorded so the trade stays visible.
 
 ### L11 — Dropped events re-render for nothing {#l11}
 
-**Where** — [`reducer.ts:239`](../apps/web/src/feed/reducer.ts) and the other
-drop sites, all of which `return { ...state, stats }`.
+**Where** — the three drop sites in
+[`reducer.ts`](../apps/web/src/feed/reducer.ts) (lines 395, 411 and 442), all of
+which `return { ...state, stats }`.
 
 A new state object means `useReducer` never bails out, so a reconnect replaying
 300 duplicates costs 300 renders with no visual change.
@@ -250,7 +288,7 @@ thing preventing it is the counter increment, which could move to a ref.
 
 ### L12 — Validation runs on every event {#l12}
 
-**Where** — [`thread-runner.ts:129`](../apps/server/src/thread-runner.ts).
+**Where** — [`thread-runner.ts:184`](../apps/server/src/thread-runner.ts).
 
 Every outgoing event is parsed through zod, including every token delta. Chosen
 deliberately: a protocol mistake fails in the server's own tests instead of
@@ -276,6 +314,20 @@ This mattered more than its size suggests: **`droppedLossy` is the signal that
 [L1](#l1) was firing.** Buried in a combined counter alongside the replay drops
 that follow every reconnect, the one number that meant "the feed is missing
 something" was indistinguishable from noise.
+
+### L14 — Counters are tracked but never surfaced {#l14}
+
+`FeedState.stats` carries four counters — `applied`, `droppedRedundant`,
+`droppedLossy`, `resyncs` — and only `applied` is consumed, as the sticky-scroll
+trigger in [`App.tsx:60`](../apps/web/src/App.tsx). Since [L13](#l13), the
+values are meaningful, and `?debug` now reveals all four in the header —
+which is what makes recovery observable while testing by hand
+(see [TESTING.md](TESTING.md)). They remain hidden by default and there is no
+alerting: `droppedLossy > 0` is the one number worth wiring to something.
+
+---
+
+## User experience
 
 ### L16 — A resynced feed can be mostly empty threads {#l16}
 
@@ -307,7 +359,7 @@ is unrecoverable.
 **Untested against a real model.** The per-thread cost above is measured in
 scripted mode. With `MODEL_MODE=gemini` the delta count is whatever the API
 chunks to, so the readable window could be several times smaller and the
-`SSE_REPLAY_BUFFER: 500` default may be badly sized. Measuring it needs an API
+`EVENT_RETENTION: 500` default may be badly sized. Measuring it needs an API
 key and has not been done &mdash; `lastSeq` in the snapshot is the event count
 per thread, so it is a one-liner once someone has one. See
 [TESTING.md](TESTING.md).
@@ -322,16 +374,6 @@ per thread, so it is a one-liner once someone has one. See
    disappears, at the cost of a store. That is [L7](#l7).
 
 None is built; the honest wording and the quiet rendering are.
-
-### L14 — Counters are tracked but never surfaced {#l14}
-
-`FeedState.stats` carries four counters — `applied`, `droppedRedundant`,
-`droppedLossy`, `resyncs` — and only `applied` is consumed, as the sticky-scroll
-trigger in [`App.tsx:50`](../apps/web/src/App.tsx). Since [L13](#l13), the
-values are meaningful, and `?debug` now reveals all four in the header —
-which is what makes recovery observable while testing by hand
-(see [TESTING.md](TESTING.md)). They remain hidden by default and there is no
-alerting: `droppedLossy > 0` is the one number worth wiring to something.
 
 ---
 
