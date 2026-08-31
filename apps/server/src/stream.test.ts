@@ -396,20 +396,32 @@ describe('replay-buffer overrun (L1)', () => {
    * The priming frame and the resync notice arrive as separate chunks, so a
    * single `read()` is not enough to decide either way.
    */
-  async function readRawUntil(url: string, needle: string, maxChunks = 8): Promise<string> {
-    const response = await fetch(url, { headers: { Accept: 'text/event-stream' } });
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
+  async function readRawUntil(url: string, needle: string, timeoutMs = 1500): Promise<string> {
+    // Bounded by time, not by a chunk count. How many TCP chunks a set of
+    // frames arrives in is environment-dependent -- locally these writes land
+    // in several, on CI they coalesce -- so counting reads meant the negative
+    // cases blocked forever on an idle stream and timed out the test.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let text = '';
     try {
-      for (let i = 0; i < maxChunks; i += 1) {
+      const response = await fetch(url, {
+        headers: { Accept: 'text/event-stream' },
+        signal: controller.signal,
+      });
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
         if (text.includes(needle)) break;
       }
-    } finally {
       await reader.cancel().catch(() => {});
+    } catch {
+      // Aborting on the deadline is how the negative cases finish.
+    } finally {
+      clearTimeout(timer);
     }
     return text;
   }
@@ -479,7 +491,6 @@ describe('replay-buffer overrun (L1)', () => {
       const text = await readRawUntil(
         `${tiny.url}/api/stream?sessionId=s-whole`,
         'event: resync',
-        4,
       );
       expect(text).not.toContain('event: resync');
       // And the thread's opening event is still there to be replayed.
@@ -510,7 +521,6 @@ describe('replay-buffer overrun (L1)', () => {
       const second = await readRawUntil(
         `${tiny.url}/api/stream?sessionId=s-loop&lastEventId=${from - 1}`,
         'event: resync',
-        4,
       );
       expect(second).not.toContain('event: resync');
       // And it still gets the full replay the notice promised.
@@ -533,7 +543,6 @@ describe('replay-buffer overrun (L1)', () => {
       const text = await readRawUntil(
         `${tiny.url}/api/stream?sessionId=s-covered&lastEventId=1`,
         'event: resync',
-        4,
       );
       expect(text).not.toContain('event: resync');
     } finally {

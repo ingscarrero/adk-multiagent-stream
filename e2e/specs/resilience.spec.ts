@@ -37,8 +37,12 @@ test.describe('cancellation', () => {
   });
 
   test('does not affect other threads', async ({ feed }) => {
-    const doomed = await feed.send(RESEARCH, 'research');
+    // Start the survivor first, so the only delay between creating the doomed
+    // thread and cancelling it is the click itself. Sending the survivor in
+    // between gave the research pipeline time to finish on slower machines,
+    // and Stop had already been removed by the time the click landed.
     const survivor = await feed.send('What is your warranty coverage?');
+    const doomed = await feed.send(RESEARCH, 'research');
 
     await feed.cancel(doomed);
     await feed.expectStatus(doomed, 'cancelled');
