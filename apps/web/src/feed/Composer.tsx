@@ -31,6 +31,9 @@ const SUGGESTIONS: Record<string, string[]> = {
   router: [
     'Where is my order, can you track shipping?',
     'What is your warranty coverage?',
+    // Reaches the human-in-the-loop gate: the refund is over the approval
+    // threshold, so the thread pauses on `awaiting_input` instead of finishing.
+    'Refund order A-1001, it arrived damaged',
   ],
   research: [
     'How should we position the product?',

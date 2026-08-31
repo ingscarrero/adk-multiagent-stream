@@ -185,6 +185,59 @@ describe('turn counting ignores foreign tool responses', () => {
   });
 });
 
+describe('rejectedText: the one place a script reads a tool result', () => {
+  const gated: ScriptBranch[] = [
+    {
+      match: /refund/i,
+      turns: [
+        { kind: 'toolCall', calls: [{ name: 'doRefund', args: {} }] },
+        { kind: 'text', text: 'Refund applied.', rejectedText: 'Refund not applied.' },
+      ],
+    },
+  ];
+  const gatedModel = () => new ScriptedLlm({ branches: gated, chunkDelayMs: 0, wordsPerChunk: 2 });
+
+  const rejected = () => ({
+    role: 'user',
+    parts: [{ functionResponse: { name: 'doRefund', response: { error: 'This tool call is rejected.' } } }],
+  });
+  const succeeded = () => ({
+    role: 'user',
+    parts: [{ functionResponse: { name: 'doRefund', response: { refunded: true } } }],
+  });
+
+  const textOf = (responses: LlmResponse[]) =>
+    responses
+      .filter((r) => r.turnComplete)
+      .flatMap((r) => r.content?.parts ?? [])
+      .map((p) => p.text ?? '')
+      .join('');
+
+  it.each([false, true])('uses the refusal answer when streaming is %s', async (stream) => {
+    // Both modes, because the first version of this only fixed the
+    // non-streaming path. Everything above passed while the streamed answer --
+    // the one the app actually uses -- still said the refund was applied.
+    const responses = await collect(
+      gatedModel().generateContentAsync(request([userTurn('refund it'), rejected()]), stream),
+    );
+    expect(textOf(responses)).toBe('Refund not applied.');
+  });
+
+  it.each([false, true])('uses the normal answer when the tool ran, streaming %s', async (stream) => {
+    const responses = await collect(
+      gatedModel().generateContentAsync(request([userTurn('refund it'), succeeded()]), stream),
+    );
+    expect(textOf(responses)).toBe('Refund applied.');
+  });
+
+  it('falls back to the normal text when a turn declares no refusal answer', async () => {
+    const responses = await collect(
+      model().generateContentAsync(request([userTurn('my order'), toolResponse('lookupOrder')]), false),
+    );
+    expect(textOf(responses)).toBe('Your order is on its way');
+  });
+});
+
 describe('ADK cross-agent context frames', () => {
   it('selects the branch from the real user prompt, not ADK\'s rewritten frames', async () => {
     // Regression: on transfer, ADK rewrites the previous agent's tool call and

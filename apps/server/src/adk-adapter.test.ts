@@ -149,7 +149,74 @@ describe('tools', () => {
         },
       }),
     );
-    expect(drafts).toEqual([{ type: 'thread.status', status: 'awaiting_input' }]);
+    expect(drafts).toEqual([
+      { type: 'thread.input_required', requestId: 'r1', kind: 'confirmation' },
+      { type: 'thread.status', status: 'awaiting_input' },
+    ]);
+  });
+
+  it('emits the request before the status, so a client that stops at the status has it', () => {
+    // Same ordering rule as thread.error: reason first, then state. A consumer
+    // that reacts to `awaiting_input` by rendering an approval control must
+    // already know what it is approving.
+    const t = new AdkEventTranslator('running');
+    const drafts = t.translate(
+      adkEvent({
+        content: {
+          role: 'model',
+          parts: [{ functionCall: { id: 'r1', name: 'adk_request_confirmation', args: {} } }],
+        },
+      }),
+    );
+    const request = drafts.findIndex((d) => d.type === 'thread.input_required');
+    const status = drafts.findIndex((d) => d.type === 'thread.status');
+    expect(request).toBeGreaterThanOrEqual(0);
+    expect(request).toBeLessThan(status);
+  });
+
+  it('carries the gated call arguments, which the interrupt itself does not', () => {
+    // ADK names the tool and stops there. "Approve requestRefund" is the same
+    // sentence for $4 and $400, so the adapter pairs the interrupt with the
+    // arguments from the call that triggered it.
+    const t = new AdkEventTranslator('running');
+    t.translate(
+      adkEvent({
+        content: {
+          role: 'model',
+          parts: [
+            {
+              functionCall: {
+                id: 'c1',
+                name: 'requestRefund',
+                args: { orderId: 'A-1001', amount: 129.99 },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    const drafts = t.translate(
+      adkEvent({
+        content: {
+          role: 'model',
+          parts: [
+            {
+              functionCall: {
+                id: 'r1',
+                name: 'adk_request_confirmation',
+                args: { originalFunctionCall: { name: 'requestRefund' } },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    expect(drafts[0]).toMatchObject({
+      type: 'thread.input_required',
+      requestId: 'r1',
+      toolName: 'requestRefund',
+      toolArgs: { orderId: 'A-1001', amount: 129.99 },
+    });
   });
 });
 

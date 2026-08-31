@@ -1,6 +1,6 @@
 {
   "name": "support",
-  "description": "Behavioural expectations for the support router and its specialists. Written against the scripted model, so a failure here means the agent graph or its prompts changed, not that the model drifted.",
+  "description": "Behavioural expectations for the support router and its specialists. Written against the scripted model, so a failure here means the agent graph or its prompts changed, not that the model drifted. `refund-requires-approval` is deliberately trajectory-only: the run pauses on a confirmation gate, so there is no answer text to score -- the assertion is that the agent requested the refund and then stopped.",
   "thresholds": {
     "toolTrajectory": 1,
     "responseMatch": 0.5
@@ -11,39 +11,76 @@
       "query": "Where is my order, can you track shipping?",
       "agent": "router",
       "expectedToolTrajectory": [
-        { "name": "lookupOrder", "args": { "orderId": "A-1001" } },
-        { "name": "checkShippingStatus", "args": { "orderId": "A-1001" } }
+        {
+          "name": "lookupOrder",
+          "args": {
+            "orderId": "A-1001"
+          }
+        },
+        {
+          "name": "checkShippingStatus",
+          "args": {
+            "orderId": "A-1001"
+          }
+        }
       ],
       "expectedResponse": "Order A-1001 has shipped and departed the regional hub. Estimated delivery is 2 September 2026.",
-      "mustContain": ["A-1001"]
+      "mustContain": [
+        "A-1001"
+      ]
     },
     {
       "id": "order-status-no-tracking",
       "query": "What is the status of my order?",
       "agent": "router",
-      "expectedToolTrajectory": [{ "name": "lookupOrder", "args": { "orderId": "A-1002" } }],
+      "expectedToolTrajectory": [
+        {
+          "name": "lookupOrder",
+          "args": {
+            "orderId": "A-1002"
+          }
+        }
+      ],
       "expectedResponse": "Order A-1002 is still processing, containing a USB-C hub and a cable, estimated delivery 5 September 2026.",
-      "mustContain": ["A-1002"]
+      "mustContain": [
+        "A-1002"
+      ]
     },
     {
       "id": "warranty-policy",
       "query": "What is your warranty coverage?",
       "agent": "router",
       "expectedToolTrajectory": [
-        { "name": "searchKnowledgeBase", "args": { "query": "warranty", "limit": 2 } }
+        {
+          "name": "searchKnowledgeBase",
+          "args": {
+            "query": "warranty",
+            "limit": 2
+          }
+        }
       ],
       "expectedResponse": "Hardware is covered by a two year limited warranty for manufacturing defects. Accidental damage is not included.",
-      "mustContain": ["warranty"]
+      "mustContain": [
+        "warranty"
+      ]
     },
     {
       "id": "returns-policy",
       "query": "What is your return and refund policy?",
       "agent": "router",
       "expectedToolTrajectory": [
-        { "name": "searchKnowledgeBase", "args": { "query": "return refund policy", "limit": 2 } }
+        {
+          "name": "searchKnowledgeBase",
+          "args": {
+            "query": "return refund policy",
+            "limit": 2
+          }
+        }
       ],
       "expectedResponse": "Unopened items can be returned within 30 days for a full refund. Opened items are subject to a 15 percent restocking fee.",
-      "mustContain": ["30 days"]
+      "mustContain": [
+        "30 days"
+      ]
     },
     {
       "id": "no-tools-needed",
@@ -58,11 +95,33 @@
       "query": "How should we position the product?",
       "agent": "research",
       "expectedToolTrajectory": [
-        { "name": "searchKnowledgeBase", "args": {} },
-        { "name": "searchKnowledgeBase", "args": {} }
+        {
+          "name": "searchKnowledgeBase",
+          "args": {}
+        },
+        {
+          "name": "searchKnowledgeBase",
+          "args": {}
+        }
       ],
       "expectedResponse": "Delivery speed and policy clarity are the two levers. Lead with express shipping availability, then reassure on the 30 day return window and the two year warranty.",
-      "mustContain": ["Synthesis"]
+      "mustContain": [
+        "Synthesis"
+      ]
+    },
+    {
+      "id": "refund-requires-approval",
+      "query": "Refund order A-1001, it arrived damaged",
+      "agent": "router",
+      "expectedToolTrajectory": [
+        {
+          "name": "requestRefund",
+          "args": {
+            "orderId": "A-1001",
+            "amount": 129.99
+          }
+        }
+      ]
     }
   ]
 }

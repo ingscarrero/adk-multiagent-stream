@@ -26,7 +26,8 @@ const FALLBACK_AGENTS: AgentOption[] = [
 ];
 
 export function App() {
-  const { state, connection, lastError, startThread, cancelThread } = useFeedStream();
+  const { state, connection, lastError, startThread, cancelThread, followUp, respond } =
+    useFeedStream();
   const [agents, setAgents] = useState<AgentOption[]>(FALLBACK_AGENTS);
 
   useEffect(() => {
@@ -118,7 +119,13 @@ export function App() {
           {state.order.map((threadId) => {
             const thread = state.threads[threadId];
             return thread ? (
-              <ThreadCard key={threadId} thread={thread} onCancel={(id) => void cancelThread(id)} />
+              <ThreadCard
+                key={threadId}
+                thread={thread}
+                onCancel={(id) => void cancelThread(id)}
+                onFollowUp={(id, prompt) => void followUp(id, prompt)}
+                onRespond={(id, requestId, approved) => void respond(id, requestId, approved)}
+              />
             ) : null;
           })}
         </div>

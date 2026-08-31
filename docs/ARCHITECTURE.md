@@ -91,6 +91,21 @@ layer between an edit and seeing it work.
 
 Two entrypoints, chosen because they stress a streaming feed in different ways.
 
+### Multi-turn threads
+
+A thread is a conversation, not a single run. Three endpoints continue one, and
+all three reduce to *run again against the same ADK session with a different
+message*:
+
+| Endpoint | `newMessage` | Re-enters from |
+|---|---|---|
+| `POST /api/threads` | the opening prompt | — |
+| `POST /api/threads/:id/messages` | the follow-up text | `complete`, `cancelled` |
+| `POST /api/threads/:id/respond` | a `functionResponse` quoting ADK's interrupt id | `awaiting_input` |
+
+ADK accumulates history in the session, so the follow-up needs no context
+re-sent and the approval resumes a tool call ADK finds in that same history.
+
 ### `router` — agent transfer
 
 ```

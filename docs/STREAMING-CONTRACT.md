@@ -75,6 +75,8 @@ The event types are defined in [`packages/protocol/src/events.ts`](../packages/p
 | Type | Meaning |
 |---|---|
 | `thread.created` | Always `seq: 1`, always first. Carries the prompt and agent. |
+| `message.user` | A follow-up the user sent into an existing thread. Never the opening prompt — that is `thread.created`. |
+| `thread.input_required` | The run is paused on a human decision. Carries the interrupt id to quote back, the gated tool, and its arguments. |
 | `thread.status` | A lifecycle transition (§4). |
 | `message.delta` | Append this text to `messageId`. |
 | `message.complete` | The authoritative full text of `messageId`. **Replace, don't append.** |
@@ -157,12 +159,43 @@ which left the two state machines on different states. `assertTransition` threw
 and failed the thread immediately — a five-minute fix instead of a subtle
 mis-render nobody would have noticed for weeks.
 
-### Guarantee: every thread reaches a terminal status
+### Guarantee: every turn reaches a terminal status, or a pause the client can answer
 
 Enforced by a `finally` block in `apps/server/src/thread-runner.ts`, so it holds
 when the model errors, when the client cancels, and when ADK throws. Any message
 still open is closed out at the same time, so no caret is left blinking on a
-thread that is finished.
+thread that has stopped.
+
+**"Turn", not "thread", and the distinction is load-bearing.** A thread is a
+conversation and may take a follow-up, so `complete` and `cancelled` each have
+exactly one outgoing edge — back to `running`. `error` has none: a failed run
+left an unknown amount of work half applied.
+
+The second half of the guarantee is the human-in-the-loop pause. A run gated on
+`requireConfirmation` ends its generator without finishing, and closing it out
+as `complete` would be both false and unanswerable. So `awaiting_input` is the
+one non-terminal state a turn may end in — and it is only reachable alongside a
+`thread.input_required` event naming what would unblock it. A pause nobody can
+answer is a hang.
+
+### Multi-turn: three ways in, one path through
+
+`POST /api/threads` (open), `POST /api/threads/:id/messages` (follow up) and
+`POST /api/threads/:id/respond` (approve or deny) all do the same thing: run
+again against the thread's existing ADK session, with a different
+`newMessage`. History accumulates in that session, which is why a follow-up can
+be answered from an earlier turn and why an approval can resume a paused tool
+call — ADK finds the confirmation in the same history.
+
+All three return `202` and nothing else useful; the consequences arrive on the
+stream, correlated by `threadId`. `409` distinguishes *the state refuses this*
+from `404` *no such thread*, which is what a client needs to decide whether
+retrying could ever help.
+
+`respond` additionally requires the `requestId` to match what is actually
+pending, rather than answering whatever is waiting. A stale click authorising an
+action nobody read is the failure that guard exists for, and ADK makes the same
+check on its side and fails closed.
 
 ---
 

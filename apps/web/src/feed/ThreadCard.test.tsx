@@ -40,7 +40,7 @@ const withMessage = (text: string, streaming: boolean, author = 'order_agent') =
 
 describe('rendering', () => {
   it('shows the prompt, the agent, and the status', () => {
-    render(<ThreadCard thread={thread({ status: 'awaiting_tool' })} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={thread({ status: 'awaiting_tool' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
 
     expect(screen.getByTestId('thread-prompt')).toHaveTextContent('where is my order?');
     expect(screen.getByTestId('thread-agent')).toHaveTextContent('router');
@@ -48,22 +48,22 @@ describe('rendering', () => {
   });
 
   it('names the message author, so a multi-agent transcript stays readable', () => {
-    render(<ThreadCard thread={withMessage('Order A-1001 shipped', false)} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={withMessage('Order A-1001 shipped', false)} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.getByTestId('agent-message')).toHaveAttribute('data-author', 'order_agent');
   });
 
   it('marks a streaming message so the caret can render', () => {
-    render(<ThreadCard thread={withMessage('Order A-10', true)} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={withMessage('Order A-10', true)} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.getByTestId('agent-message')).toHaveAttribute('data-streaming', 'true');
   });
 
   it('shows a placeholder while an active thread has produced nothing', () => {
-    render(<ThreadCard thread={thread({ status: 'running' })} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={thread({ status: 'running' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.getByTestId('thread-placeholder')).toBeInTheDocument();
   });
 
   it('hides the placeholder once a thread is terminal and empty', () => {
-    render(<ThreadCard thread={thread({ status: 'cancelled' })} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={thread({ status: 'cancelled' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.queryByTestId('thread-placeholder')).not.toBeInTheDocument();
   });
 
@@ -76,7 +76,7 @@ describe('rendering', () => {
       tools: { c1: { callId: 'c1', name: 'lookupOrder', args: { orderId: 'A-1' }, state: 'done', result: {} } },
       messages: { m1: { id: 'm1', author: 'order_agent', text: 'Found it', streaming: false } },
     });
-    render(<ThreadCard thread={state} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={state} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
 
     const rendered = screen.getAllByTestId(/tool-step|agent-message/);
     expect(rendered.map((el) => el.dataset['testid'] ?? el.getAttribute('data-testid'))).toEqual([
@@ -89,7 +89,7 @@ describe('rendering', () => {
     render(
       <ThreadCard
         thread={thread({ status: 'error', error: { message: 'model exploded', code: 'BOOM' } })}
-        onCancel={vi.fn()}
+        onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()}
       />,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('model exploded');
@@ -100,7 +100,7 @@ describe('cancellation control', () => {
   it.each(['queued', 'running', 'streaming', 'awaiting_tool'] as ThreadStatus[])(
     'offers Stop while the thread is %s',
     (status) => {
-      render(<ThreadCard thread={thread({ status })} onCancel={vi.fn()} />);
+      render(<ThreadCard thread={thread({ status })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
       expect(screen.getByTestId('cancel-thread')).toBeInTheDocument();
     },
   );
@@ -108,14 +108,14 @@ describe('cancellation control', () => {
   it.each(['complete', 'error', 'cancelled'] as ThreadStatus[])(
     'hides Stop once the thread is %s',
     (status) => {
-      render(<ThreadCard thread={thread({ status })} onCancel={vi.fn()} />);
+      render(<ThreadCard thread={thread({ status })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
       expect(screen.queryByTestId('cancel-thread')).not.toBeInTheDocument();
     },
   );
 
   it('passes the thread id to onCancel', async () => {
     const onCancel = vi.fn();
-    render(<ThreadCard thread={thread()} onCancel={onCancel} />);
+    render(<ThreadCard thread={thread()} onCancel={onCancel} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
 
     await userEvent.click(screen.getByTestId('cancel-thread'));
     expect(onCancel).toHaveBeenCalledWith('thr-1');
@@ -124,24 +124,24 @@ describe('cancellation control', () => {
 
 describe('accessibility', () => {
   it('gives the thread an accessible name derived from the prompt', () => {
-    render(<ThreadCard thread={thread()} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={thread()} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.getByRole('region', { name: /where is my order/i })).toBeInTheDocument();
   });
 
   it('announces status changes in a polite live region', () => {
-    const { rerender } = render(<ThreadCard thread={thread({ status: 'running' })} onCancel={vi.fn()} />);
+    const { rerender } = render(<ThreadCard thread={thread({ status: 'running' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     const announcement = screen.getByTestId('thread-status-announcement');
     expect(announcement).toHaveAttribute('aria-live', 'polite');
     expect(announcement).toHaveTextContent('Thinking');
 
-    rerender(<ThreadCard thread={thread({ status: 'complete' })} onCancel={vi.fn()} />);
+    rerender(<ThreadCard thread={thread({ status: 'complete' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(announcement).toHaveTextContent('Done');
   });
 
   it('keeps the streaming caret out of the accessible text', () => {
     // A live-updating caret inside announced text makes a screen reader
     // re-read the message on every token.
-    render(<ThreadCard thread={withMessage('Half a sen', true)} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={withMessage('Half a sen', true)} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.getByTestId('message-text')).toHaveTextContent('Half a sen');
   });
 });
@@ -154,7 +154,7 @@ describe('threads rebuilt after a replay-buffer overrun', () => {
     render(
       <ThreadCard
         thread={thread({ status: 'complete', historyTruncated: true, timeline: [] })}
-        onCancel={vi.fn()}
+        onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()}
       />,
     );
     const notice = screen.getByTestId('thread-truncated');
@@ -170,7 +170,7 @@ describe('threads rebuilt after a replay-buffer overrun', () => {
           timeline: [{ kind: 'message', id: 'm1' }],
           messages: { m1: { id: 'm1', author: 'order_agent', text: 'partial', streaming: false } },
         }}
-        onCancel={vi.fn()}
+        onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()}
       />,
     );
     const notice = screen.getByTestId('thread-truncated');
@@ -179,7 +179,7 @@ describe('threads rebuilt after a replay-buffer overrun', () => {
   });
 
   it('shows no notice on a thread that lost nothing', () => {
-    render(<ThreadCard thread={thread({ status: 'complete' })} onCancel={vi.fn()} />);
+    render(<ThreadCard thread={thread({ status: 'complete' })} onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()} />);
     expect(screen.queryByTestId('thread-truncated')).not.toBeInTheDocument();
   });
 
@@ -188,7 +188,7 @@ describe('threads rebuilt after a replay-buffer overrun', () => {
     render(
       <ThreadCard
         thread={thread({ status: 'complete', historyTruncated: true, timeline: [] })}
-        onCancel={vi.fn()}
+        onCancel={vi.fn()} onFollowUp={vi.fn()} onRespond={vi.fn()}
       />,
     );
     expect(screen.queryByTestId('thread-placeholder')).not.toBeInTheDocument();

@@ -70,7 +70,13 @@ export interface ToolInvocation {
 /** An ordered reference into `messages` or `tools`, in arrival order. */
 export type TimelineItem =
   | { kind: 'message'; id: string }
-  | { kind: 'tool'; callId: string };
+  | { kind: 'tool'; callId: string }
+  /**
+   * A follow-up the user typed. Carried inline rather than by reference,
+   * because unlike a message or a tool call it is never updated after arrival
+   * -- there is no second event to correlate with.
+   */
+  | { kind: 'user'; text: string; at: number };
 
 export interface ThreadState {
   id: string;
@@ -93,6 +99,20 @@ export interface ThreadState {
    * present a partial thread as whole.
    */
   historyTruncated: boolean;
+  /**
+   * The human decision this thread is blocked on, when it is blocked.
+   *
+   * Present exactly while `status === 'awaiting_input'`. Cleared when the run
+   * resumes, so the approval control cannot outlive the request it answers --
+   * which would let a user approve something twice.
+   */
+  inputRequest?: {
+    requestId: string;
+    kind: 'confirmation' | 'credential' | 'input';
+    toolName?: string;
+    toolArgs?: Record<string, unknown>;
+    prompt?: string;
+  };
   /**
    * Set by a resync: the next event for this thread may skip ahead of
    * `lastSeq`, and should be accepted rather than buffered against a gap.
@@ -189,11 +209,35 @@ function applyToThread(thread: ThreadState, event: FeedEvent): ThreadState {
       // Already handled by `createThread`; re-applying is a no-op.
       return next;
 
-    case 'thread.status':
+    case 'thread.status': {
       // The client tolerates an illegal transition (drops it) where the server
       // throws. A browser must survive a version-skewed or replayed stream.
       if (!canTransition(thread.status, event.status)) return next;
+      // Leaving `awaiting_input` means the request was answered, so the control
+      // goes with it. Keyed off the status rather than off the response landing,
+      // because the status is the thing that is replayed on reconnect.
+      if (thread.status === 'awaiting_input' && event.status !== 'awaiting_input') {
+        const { inputRequest: _answered, ...rest } = next;
+        return { ...rest, status: event.status };
+      }
       return { ...next, status: event.status };
+    }
+
+    case 'message.user':
+      next.timeline = [...thread.timeline, { kind: 'user', text: event.text, at: event.ts }];
+      return next;
+
+    case 'thread.input_required':
+      return {
+        ...next,
+        inputRequest: {
+          requestId: event.requestId,
+          kind: event.kind,
+          ...(event.toolName ? { toolName: event.toolName } : {}),
+          ...(event.toolArgs ? { toolArgs: event.toolArgs } : {}),
+          ...(event.prompt ? { prompt: event.prompt } : {}),
+        },
+      };
 
     case 'thread.error':
       return {

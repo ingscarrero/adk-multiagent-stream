@@ -50,6 +50,20 @@ export const threadCreatedSchema = z.object({
   agent: z.string(),
 });
 
+/**
+ * A message the *user* sent into an existing thread.
+ *
+ * `thread.created` already carries the opening prompt, so this is only ever a
+ * follow-up -- the second turn onward. Keeping them as separate types means a
+ * reader never has to ask which of two user messages started the thread, and
+ * the reducer can place a follow-up in the timeline without re-deriving it.
+ */
+export const messageUserSchema = z.object({
+  type: z.literal('message.user'),
+  ...envelope,
+  text: z.string(),
+});
+
 /** An incremental chunk of model text. Append-only: never re-sends prior text. */
 export const messageDeltaSchema = z.object({
   type: z.literal('message.delta'),
@@ -104,6 +118,33 @@ export const threadStatusEventSchema = z.object({
   status: threadStatusSchema,
 });
 
+/**
+ * The run is paused on a human decision.
+ *
+ * Emitted alongside the `awaiting_input` status, and carrying what that status
+ * cannot: *what* is being asked. A status alone tells the UI to stop showing a
+ * spinner; it does not tell it what to render instead, or what to send back.
+ *
+ * `requestId` is ADK's `interruptId`, and answering means quoting it back --
+ * see `POST /api/threads/:id/respond`. It is opaque to the client on purpose:
+ * the client's job is to relay a decision, not to understand ADK's interrupt
+ * encoding.
+ */
+export const threadInputRequiredSchema = z.object({
+  type: z.literal('thread.input_required'),
+  ...envelope,
+  /** ADK's interrupt id. Quote it back to answer. */
+  requestId: z.string().min(1),
+  /** What is being asked for. Only `confirmation` is reachable today. */
+  kind: z.enum(['confirmation', 'credential', 'input']),
+  /** The tool awaiting approval, when the request is a confirmation. */
+  toolName: z.string().optional(),
+  /** The arguments that tool would run with, so the user can judge the request. */
+  toolArgs: z.record(z.string(), z.unknown()).optional(),
+  /** Human-readable prompt, when the raiser supplied one. */
+  prompt: z.string().optional(),
+});
+
 /** Terminal failure. Always followed by no further events for this thread. */
 export const threadErrorSchema = z.object({
   type: z.literal('thread.error'),
@@ -115,6 +156,8 @@ export const threadErrorSchema = z.object({
 
 export const feedEventSchema = z.discriminatedUnion('type', [
   threadCreatedSchema,
+  messageUserSchema,
+  threadInputRequiredSchema,
   messageDeltaSchema,
   messageCompleteSchema,
   toolCallSchema,
@@ -130,6 +173,8 @@ export type FeedEventType = FeedEvent['type'];
 export type FeedEventOf<T extends FeedEventType> = Extract<FeedEvent, { type: T }>;
 
 export type ThreadCreatedEvent = FeedEventOf<'thread.created'>;
+export type MessageUserEvent = FeedEventOf<'message.user'>;
+export type ThreadInputRequiredEvent = FeedEventOf<'thread.input_required'>;
 export type MessageDeltaEvent = FeedEventOf<'message.delta'>;
 export type MessageCompleteEvent = FeedEventOf<'message.complete'>;
 export type ToolCallEvent = FeedEventOf<'tool.call'>;
@@ -160,6 +205,32 @@ export const createThreadRequestSchema = z.object({
 });
 
 export type CreateThreadRequest = z.infer<typeof createThreadRequestSchema>;
+
+/**
+ * Body of `POST /api/threads/:id/messages` -- a follow-up in an existing thread.
+ *
+ * No `agent` field: a follow-up continues the conversation it is part of, and
+ * re-routing mid-thread would make the transcript incoherent.
+ */
+export const followUpRequestSchema = z.object({
+  prompt: z.string().min(1).max(4000),
+});
+
+export type FollowUpRequest = z.infer<typeof followUpRequestSchema>;
+
+/**
+ * Body of `POST /api/threads/:id/respond` -- answering a paused run.
+ *
+ * `requestId` is required rather than implied by the thread, so a stale
+ * approval cannot resolve a *different* request that happens to be pending by
+ * the time it lands. The server rejects a mismatch instead of guessing.
+ */
+export const inputResponseRequestSchema = z.object({
+  requestId: z.string().min(1),
+  approved: z.boolean(),
+});
+
+export type InputResponseRequest = z.infer<typeof inputResponseRequestSchema>;
 
 /**
  * A thread as the server currently knows it, without its transcript.

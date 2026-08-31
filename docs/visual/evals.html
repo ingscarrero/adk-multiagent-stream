@@ -379,7 +379,7 @@ F1        = 2PR / (P + R)</code></pre>
   <section>
     <h2>What it looks like, and where it runs</h2>
 
-    <pre><code>support &mdash; 6 cases
+    <pre><code>support &mdash; 7 cases
 thresholds: trajectory &gt;= 1, response &gt;= 0.5
 
   <span class="s-ok-text">&#10003;</span> order-tracking               traj 1.00  resp 0.94  315ms
@@ -388,8 +388,11 @@ thresholds: trajectory &gt;= 1, response &gt;= 0.5
   <span class="s-ok-text">&#10003;</span> returns-policy               traj 1.00  resp 1.00  156ms
   <span class="s-ok-text">&#10003;</span> no-tools-needed              traj 1.00  resp 1.00    1ms
   <span class="s-ok-text">&#10003;</span> research-pipeline            traj 1.00  resp 0.52  160ms
+  <span class="s-ok-text">&#10003;</span> refund-requires-approval     traj 1.00  resp 1.00    3ms
 
-6/6 passed  (avg trajectory 1.00, avg response 0.89)</code></pre>
+7/7 passed  (avg trajectory 1.00, avg response 0.90)</code></pre>
+
+    <p><code>refund-requires-approval</code> is scored on trajectory alone, and it is the clearest argument for the metric on this page. The run pauses on a human-in-the-loop gate, so there is <em>no answer text at all</em> &mdash; the entire assertion is that the agent asked for the refund <strong>and then stopped</strong>. No response metric can express that.</p>
 
     <p><code>research-pipeline</code> at 0.52 is the case sitting closest to its threshold, and that is expected rather than alarming: the synthesiser writes prose from two parallel findings, so its wording is the least constrained thing the suite scores. Its <code>mustContain</code> is what actually pins it.</p>
 
@@ -403,7 +406,7 @@ thresholds: trajectory &gt;= 1, response &gt;= 0.5
       </table>
     </div>
 
-    <p>The dual run matters more than it sounds. An evalset that only runs on demand is documentation; one that runs in CI is a contract. Putting it inside <code>pnpm test</code> means the 6 cases are as load-bearing as the 231 unit tests around them.</p>
+    <p>The dual run matters more than it sounds. An evalset that only runs on demand is documentation; one that runs in CI is a contract. Putting it inside <code>pnpm test</code> means the 7 cases are as load-bearing as the 259 unit tests around them.</p>
 
     <h3>Against the runner, not the server</h3>
     <p><code>runEvalCase</code> drives <code>InMemoryRunner</code> directly rather than going through HTTP. Evals grade the <em>agent</em>; routing them through the transport means a failing case could be the agent, the adapter, the hub, or the buffer. <code>chunkDelayMs: 0</code> for the same reason &mdash; streaming timing is <a href="e2e.html">the browser suite's</a> problem, not this one.</p>
@@ -416,7 +419,7 @@ thresholds: trajectory &gt;= 1, response &gt;= 0.5
         <thead><tr><th>Gap</th><th>Consequence</th></tr></thead>
         <tbody>
           <tr><td>Scripted model only</td><td>A failure means the graph or the prompts changed, never that the model drifted. Real drift is invisible here by construction</td></tr>
-          <tr><td>Single turn per case</td><td>ADK's evalset format supports multi-turn; this one drops it, along with session-state fixtures. Matches <a href="../LIMITATIONS.md">L4</a> &mdash; a thread takes one prompt</td></tr>
+          <tr><td>Single turn per case</td><td>ADK's evalset format supports multi-turn; this one drops it, along with session-state fixtures. Threads themselves now take follow-ups (<a href="../LIMITATIONS.md">L4</a>) &mdash; so this is a gap in the <em>evalset format</em>, not in the product any more</td></tr>
           <tr><td>One evalset</td><td><code>support</code> only. The research pipeline has a single case inside it rather than a set of its own</td></tr>
           <tr><td>No regression on scores</td><td>Thresholds are absolute, not relative. A case sliding from 0.94 to 0.55 passes silently</td></tr>
         </tbody>

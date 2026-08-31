@@ -336,7 +336,7 @@
         <tbody>
           <tr><td class="mono">begin()</td><td><code>running</code></td><td>once, before the ADK stream is consumed</td></tr>
           <tr><td class="mono">translate()</td><td><code>streaming</code>, <code>awaiting_tool</code>, <code>awaiting_input</code>, <code>running</code>, <code>error</code></td><td>derived from each ADK event</td></tr>
-          <tr><td class="mono">finish()</td><td><code>complete</code> / <code>error</code> / <code>cancelled</code></td><td>once, in the runner's <code>finally</code></td></tr>
+          <tr><td class="mono">finish()</td><td><code>complete</code> / <code>error</code> / <code>cancelled</code>, or <code>awaiting_input</code></td><td>once, in the runner's <code>finally</code>. The last is the run pausing on a human decision rather than ending &mdash; the one outcome that is not terminal</td></tr>
         </tbody>
       </table>
     </div>
@@ -362,6 +362,14 @@
     <div class="card warn">
       <div class="card-head"><span class="card-num">02</span><span class="card-name">Transfer is shown; framework requests are not</span></div>
       <p><code>transfer_to_agent</code> is surfaced as an ordinary <code>tool.call</code>, because a handoff is meaningful to a reader. The <code>adk_request_*</code> family is control-plane, so it moves the thread to <code>awaiting_input</code> and renders nothing. Same shape in ADK, opposite treatment.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">02b</span><span class="card-name">A pause is a functionCall, not a status &mdash; and the status alone is not enough</span></div>
+      <p>A run blocked on a human is not visible in any event's text. It is a <code>functionCall</code> part named <code>adk_request_*</code>, with everything useful buried in its <code>args</code>. A client rendering only text shows the user nothing while the run sits stopped.</p>
+      <p>ADK ships <code>getUserInputRequests</code> to flatten the three encodings &mdash; input, credential, confirmation &mdash; into one shape, so this file does not have to know how each kind stores its id. That yields a <code>thread.input_required</code> draft carrying the interrupt id to quote back, the kind, and the gated tool.</p>
+      <p><strong>Plus the arguments, which the interrupt does not carry.</strong> ADK names the tool and stops: "approve <code>requestRefund</code>" is the same sentence for $4 and $400. So the translator keeps the args of tool calls it has seen and not yet seen resolved, and pairs them with the request. The call and the interrupt arrive as two consecutive events, so the args are always already in hand.</p>
+      <p>The request is emitted <em>before</em> the status, for the same reason <code>thread.error</code> precedes its own: a consumer that reacts to <code>awaiting_input</code> by rendering an approval control must already know what it is approving.</p>
     </div>
 
     <div class="card">

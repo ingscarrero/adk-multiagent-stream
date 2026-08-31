@@ -14,18 +14,22 @@
  * navigate to the content when they want it.
  */
 
-import { isTerminal } from '@feed/protocol';
+import { canAcceptFollowUp, isTerminal } from '@feed/protocol';
 import { MessageBubble } from './MessageBubble.tsx';
 import { StatusChip, statusLabel } from './StatusChip.tsx';
 import { ToolStep } from './ToolStep.tsx';
+import { ThreadComposer } from './ThreadComposer.tsx';
+import { ApprovalPrompt } from './ApprovalPrompt.tsx';
 import type { ThreadState } from './reducer.ts';
 
 export interface ThreadCardProps {
   thread: ThreadState;
   onCancel: (threadId: string) => void;
+  onFollowUp: (threadId: string, prompt: string) => void;
+  onRespond: (threadId: string, requestId: string, approved: boolean) => void;
 }
 
-export function ThreadCard({ thread, onCancel }: ThreadCardProps) {
+export function ThreadCard({ thread, onCancel, onFollowUp, onRespond }: ThreadCardProps) {
   const active = !isTerminal(thread.status);
   /**
    * Rebuilt from a snapshot with nothing recoverable.
@@ -104,21 +108,40 @@ export function ThreadCard({ thread, onCancel }: ThreadCardProps) {
           </p>
         ) : null}
 
-        {thread.timeline.map((item) =>
-          item.kind === 'message' ? (
-            thread.messages[item.id] ? (
-              <MessageBubble key={item.id} message={thread.messages[item.id]!} />
-            ) : null
-          ) : thread.tools[item.callId] ? (
-            <ToolStep key={item.callId} tool={thread.tools[item.callId]!} />
-          ) : null,
-        )}
+        {thread.timeline.map((item, index) => {
+          if (item.kind === 'message') {
+            const message = thread.messages[item.id];
+            return message ? <MessageBubble key={item.id} message={message} /> : null;
+          }
+          if (item.kind === 'user') {
+            return (
+              // Index in the key because a follow-up carries no id: it is never
+              // updated after arrival, so its position is a stable identity.
+              <p className="thread__userMessage" key={`user-${index}`} data-testid="user-message">
+                {item.text}
+              </p>
+            );
+          }
+          const tool = thread.tools[item.callId];
+          return tool ? <ToolStep key={item.callId} tool={tool} /> : null;
+        })}
 
         {thread.error ? (
           <p className="thread__error" role="alert" data-testid="thread-error">
             {thread.error.message}
             {thread.error.code ? <code className="thread__errorCode">{thread.error.code}</code> : null}
           </p>
+        ) : null}
+
+        {thread.inputRequest ? (
+          <ApprovalPrompt
+            request={thread.inputRequest}
+            onDecide={(approved) => onRespond(thread.id, thread.inputRequest!.requestId, approved)}
+          />
+        ) : null}
+
+        {canAcceptFollowUp(thread.status) ? (
+          <ThreadComposer onSend={(prompt) => onFollowUp(thread.id, prompt)} />
         ) : null}
       </div>
     </section>

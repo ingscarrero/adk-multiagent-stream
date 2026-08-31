@@ -258,16 +258,17 @@
           <rect x="180" y="260" width="360" height="76" rx="7" class="s-ok-fill" stroke-width="1.5"/>
           <text x="198" y="284" font-size="12.5" class="s-ok-text">finally &mdash; always</text>
           <text x="198" y="306" font-size="11" class="s-mono">publish(translator.finish(outcome))</text>
-          <text x="198" y="326" font-size="10.5" class="s-sub">flushes open messages, then the terminal status</text>
+          <text x="198" y="326" font-size="10.5" class="s-sub">flushes open messages, then the outcome status</text>
 
           <rect x="580" y="260" width="240" height="76" rx="7" class="s-box" stroke-width="1.5"/>
           <text x="598" y="284" font-size="11.5" class="s-ok-text">complete</text>
           <text x="598" y="304" font-size="11.5" class="s-bad-text">error</text>
           <text x="598" y="324" font-size="11.5" class="s-warn-text">cancelled</text>
+          <text x="598" y="344" font-size="10.5" class="s-accent-text">awaiting_input &mdash; paused, not done</text>
           <line x1="543" y1="298" x2="576" y2="298" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
         </svg>
       </div>
-      <figcaption>The guarantee is structural, not conventional: whether the model errors, the client aborts, or ADK throws, the <code>finally</code> runs and the thread reaches a terminal status with no message left open.</figcaption>
+      <figcaption>The guarantee is structural, not conventional: whether the model errors, the client aborts, or ADK throws, the <code>finally</code> runs with no message left open. Stated precisely, it is now <em>every turn ends in a terminal status, or in <code>awaiting_input</code> with a request the client can answer</em> &mdash; a run paused on a human decision is not finished, and closing it out as <code>complete</code> would be both false and unanswerable.</figcaption>
     </figure>
 
     <p>Without it, a thrown ADK stream would leave a thread on <code>streaming</code> forever &mdash; a blinking caret on a run that ended, with nothing in the UI to say so and no way for the client to find out.</p>

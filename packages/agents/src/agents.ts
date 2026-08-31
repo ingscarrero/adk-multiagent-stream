@@ -49,6 +49,7 @@ import {
   checkShippingStatus,
   createSearchKnowledgeBase,
   lookupOrder,
+  requestRefund,
   searchKnowledgeBase,
 } from './tools.ts';
 
@@ -81,7 +82,7 @@ function buildRouter(options: ModelFactoryOptions, search: BaseTool): BaseAgent 
     model: createModel('order_agent', ORDER_AGENT_SCRIPT, options),
     instruction:
       'You handle order questions. Look the order up before answering, and check carrier status when the user asks where something is.',
-    tools: [lookupOrder, checkShippingStatus],
+    tools: [lookupOrder, checkShippingStatus, requestRefund],
   });
 
   const kbAgent = new LlmAgent({
