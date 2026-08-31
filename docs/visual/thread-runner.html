@@ -184,7 +184,7 @@
     <h1>Start, Stream, Settle</h1>
     <p class="standfirst">One prompt becomes a detached agent run &mdash; and the finally block that guarantees it always ends somewhere.</p>
     <span class="filepath">apps/server/src/thread-runner.ts</span>
-    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
   </header>
 
 
@@ -322,6 +322,7 @@
     <div class="card">
       <div class="card-head"><span class="card-num">02</span><span class="card-name">One ADK session per thread</span></div>
       <p><code>getOrCreateSession({ userId: sessionId, sessionId: thread.id })</code>. Threads are independent conversations, so sharing a session would leak one thread's history into another's model context. The browser session is the <em>user</em>; the thread is the <em>conversation</em>.</p>
+      <p>The <em>store</em> those sessions live in is injected: <code>ThreadRunner</code> takes a <code>BaseSessionService</code> rather than constructing one, and the sessions provider decides whether that is ADK's in-memory implementation or <code>DatabaseSessionService</code> against Postgres. ADK's own interface is the port, which makes this the cheapest real swap in the repo &mdash; see <a href="architecture.html">The Substrate Line</a>.</p>
       <p>This is also the groundwork for follow-up messages: history already accumulates in that session, so a second turn needs a route and a composer rather than a redesign.</p>
     </div>
 

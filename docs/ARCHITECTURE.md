@@ -30,24 +30,42 @@
 └─────────────────────────────────────────────────────────┘
 
   packages/protocol   zod schemas + status machine, shared by all of the above
+  packages/providers  ports + adapters for everything this app does not implement
+                      itself: sessions, knowledge, identity  (docs/PROVIDERS.md)
   packages/eval       ADK-style agent evaluation (Python-only in ADK itself)
 ```
 
-## The one rule that shapes everything
+## The two rules that shape everything
 
-**ADK types stop at `apps/server/src/adk-adapter.ts`.**
+### 1. The client half is framework-free
 
-Nothing in `@feed/web` or `@feed/protocol` imports `@google/adk`. The browser,
-the reducer, and every Playwright assertion are written against `FeedEvent`, a
-plain zod-validated union.
+**Nothing in `@feed/web` or `@feed/protocol` imports `@google/adk`.**
 
-Three things fall out of that:
+The browser, the reducer, and every Playwright assertion are written against
+`FeedEvent`, a plain zod-validated union. Server-side,
+`apps/server/src/adk-adapter.ts` is the single place ADK `Event`s become wire
+events — so the *translation* has one home, even though the runtime itself is
+used wherever agents are built.
+
+Three things fall out:
 
 - The reducer is testable with array literals — no agent framework, no network,
   no timers. That is why the ordering tests are cheap enough to be exhaustive.
-- Replacing ADK means rewriting one file.
+- Replacing ADK means rewriting the adapter and the agent package, and touching
+  nothing the user can see.
 - The UI cannot accidentally depend on an ADK implementation detail, because it
   cannot see one.
+
+### 2. Substrate sits behind a port
+
+Anything this app does not implement itself — conversation storage, retrieval,
+identity — is reached through an interface in `packages/providers`, with an
+emulated adapter by default and a real one behind a config flag. `GET
+/api/health` reports which is active.
+
+That keeps the emulation honest: it is a named, observable choice rather than
+an assumption buried in a constructor. What is emulated, what a real provider
+would serve, and where each seam lives is [PROVIDERS.md](PROVIDERS.md).
 
 ## Packages
 
@@ -55,6 +73,7 @@ Three things fall out of that:
 |---|---|---|
 | `packages/protocol` | Wire schemas, `ThreadStatus` machine | no |
 | `packages/agents` | Agent graph, tools, `ScriptedLlm`, model resolution | yes |
+| `packages/providers` | Substrate ports and their emulated adapters | yes (`BaseSessionService`) |
 | `packages/eval` | Evalset format, metrics, runner, CLI | yes |
 | `apps/server` | HTTP, SSE hub, thread lifecycle, ADK adapter | yes (adapter only) |
 | `apps/web` | React feed, reducer, hooks | no |

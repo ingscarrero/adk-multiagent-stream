@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Substrate Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>The Substrate Line</h1>
+    <p class="standfirst">The whole system in one diagram, the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for.</p>
+    <span class="filepath">docs/ARCHITECTURE.md &middot; docs/PROVIDERS.md</span>
+    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+  </header>
+
+
+  <section>
+    <h2>The whole thing, once</h2>
+    <p class="lede">Six packages. One rule about what may see what, and one line separating the logic this repo actually implements from the infrastructure it stands in for.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 470" role="img" aria-label="Layered architecture: the browser holds the React feed and a pure reducer and imports no ADK; the server holds routes, the SSE hub, the thread runner and the single ADK adapter; the agents package holds the agent graph and models; the providers package holds ports for sessions, knowledge and identity; the protocol package is shared by browser and server and imports no ADK.">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <!-- browser -->
+          <rect x="0" y="8" width="420" height="104" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="32" font-size="12.5" class="s-title">apps/web &mdash; React 19</text>
+          <text x="18" y="54" font-size="11" class="s-mono">useFeedStream (EventSource)</text>
+          <text x="18" y="72" font-size="11" class="s-mono">feedReducer (pure: gates, drain, resync)</text>
+          <rect x="250" y="80" width="152" height="22" rx="11" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="326" y="95" text-anchor="middle" font-size="10.5" class="s-ok-text">imports no ADK</text>
+
+          <!-- protocol, shared -->
+          <rect x="470" y="8" width="470" height="104" rx="8" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="488" y="32" font-size="12.5" class="s-accent-text">packages/protocol</text>
+          <text x="488" y="54" font-size="11" class="s-mono">FeedEvent union &middot; ThreadStatus machine</text>
+          <text x="488" y="72" font-size="11" class="s-mono">ThreadSummary &middot; resync notice</text>
+          <rect x="770" y="80" width="152" height="22" rx="11" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="846" y="95" text-anchor="middle" font-size="10.5" class="s-ok-text">imports no ADK</text>
+
+          <line x1="210" y1="112" x2="210" y2="146" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="222" y="134" font-size="10.5" class="s-sub">SSE + POST</text>
+          <line x1="705" y1="112" x2="705" y2="146" class="s-dash" stroke-width="1.5"/>
+          <text x="717" y="134" font-size="10.5" class="s-sub">shared types</text>
+
+          <!-- server -->
+          <rect x="0" y="148" width="940" height="122" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="172" font-size="12.5" class="s-title">apps/server &mdash; Express 5</text>
+          <rect x="18" y="184" width="200" height="68" rx="7" class="s-box" stroke-width="1"/>
+          <text x="32" y="206" font-size="11" class="s-mono">routes</text>
+          <text x="32" y="224" font-size="10" class="s-sub">identity port</text>
+          <text x="32" y="240" font-size="10" class="s-sub">health matrix</text>
+
+          <rect x="234" y="184" width="220" height="68" rx="7" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="248" y="206" font-size="11" class="s-warn-text">SessionHub</text>
+          <text x="248" y="224" font-size="10" class="s-sub">buffer + offsets + fan-out</text>
+          <text x="248" y="240" font-size="10" class="s-warn-text">no port yet</text>
+
+          <rect x="470" y="184" width="200" height="68" rx="7" class="s-box" stroke-width="1"/>
+          <text x="484" y="206" font-size="11" class="s-mono">ThreadRunner</text>
+          <text x="484" y="224" font-size="10" class="s-sub">seq, lifecycle, abort</text>
+          <text x="484" y="240" font-size="10" class="s-sub">sessions port</text>
+
+          <rect x="686" y="184" width="236" height="68" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="700" y="206" font-size="11" class="s-accent-text">adk-adapter</text>
+          <text x="700" y="224" font-size="10" class="s-sub">ADK Event -&gt; FeedEvent</text>
+          <text x="700" y="240" font-size="10" class="s-sub">the only translation</text>
+
+          <line x1="804" y1="270" x2="804" y2="300" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="560" y1="270" x2="560" y2="300" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
+
+          <!-- agents -->
+          <rect x="470" y="302" width="470" height="72" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="488" y="326" font-size="12.5" class="s-title">packages/agents &mdash; @google/adk</text>
+          <text x="488" y="348" font-size="11" class="s-mono">router (transfer) &middot; research (parallel + synth)</text>
+          <text x="488" y="366" font-size="11" class="s-mono">ScriptedLlm | Gemini &middot; tools</text>
+
+          <line x1="470" y1="338" x2="430" y2="338" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
+
+          <!-- providers -->
+          <rect x="0" y="302" width="420" height="72" rx="8" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="18" y="326" font-size="12.5" class="s-ok-text">packages/providers</text>
+          <text x="18" y="348" font-size="11" class="s-mono">sessions &middot; knowledge &middot; identity</text>
+          <text x="18" y="366" font-size="10.5" class="s-sub">ports + emulated adapters</text>
+
+          <line x1="210" y1="270" x2="210" y2="298" class="s-line" stroke-width="1.5" marker-end="url(#ar)"/>
+
+          <!-- the substrate line -->
+          <line x1="0" y1="400" x2="940" y2="400" class="s-line" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="0" y="392" font-size="11" class="s-sub">everything above is implemented here</text>
+          <text x="0" y="422" font-size="11" class="s-bad-text" style="fill: var(--bad)">everything below is emulated in-process today</text>
+
+          <rect x="0" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="90" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">session store</text>
+          <rect x="192" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="282" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">vector search</text>
+          <rect x="384" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="474" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">event log</text>
+          <rect x="576" y="432" width="180" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="666" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">pub/sub</text>
+          <rect x="768" y="432" width="172" height="30" rx="6" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="854" y="452" text-anchor="middle" font-size="11" class="s-mono" style="fill: var(--bad)">identity</text>
+        </svg>
+      </div>
+      <figcaption>The dashed line is the one worth arguing about. Above it is logic this repo implements and would keep if every provider changed. Below it is infrastructure that is currently faked in-process.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Rule one: the client never sees ADK</h2>
+    <p class="lede"><code>apps/web</code> and <code>packages/protocol</code> contain no reference to <code>@google/adk</code>. The UI, the reducer and every Playwright assertion are written against <code>FeedEvent</code> &mdash; a plain zod union.</p>
+
+    <p>ADK <em>is</em> used across the server, the agents package and the providers package. It is the agent runtime, not a detail to be hidden. The invariant worth stating is narrower and actually true: it never reaches the client, and the translation from ADK events to wire events happens in exactly one file.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Package</th><th>Imports @google/adk</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">apps/web</td><td><span class="chip chip--ok">no</span></td><td>the reducer is testable with array literals</td></tr>
+          <tr><td class="mono">packages/protocol</td><td><span class="chip chip--ok">no</span></td><td>the wire contract outlives the framework</td></tr>
+          <tr><td class="mono">apps/server</td><td>yes &mdash; runner + adapter</td><td>one file does the translation</td></tr>
+          <tr><td class="mono">packages/agents</td><td>yes &mdash; it is the runtime</td><td>agents, tools, models</td></tr>
+          <tr><td class="mono">packages/providers</td><td>yes &mdash; <code>BaseSessionService</code></td><td>ADK's own interface is the port</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The payoff is concrete. Because the reducer cannot see an agent framework, every ordering hazard is an array literal in a test rather than a browser and a stopwatch.</p>
+  </section>
+
+  <section>
+    <h2>Rule two: substrate sits behind a port</h2>
+    <p class="lede">Anything this app does not implement itself is reached through an interface, with an emulated adapter by default and a real one behind a flag. That turns the emulation from an assumption buried in a constructor into a named, observable choice.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 250" role="img" aria-label="A capability is reached through a port. The caller depends on the interface; an emulated adapter and a real adapter both satisfy it, and a single environment variable selects which is constructed.">
+          <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="72" width="200" height="66" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="98" font-size="12" class="s-title">the caller</text>
+          <text x="18" y="120" font-size="10.5" class="s-sub">searchKnowledgeBase</text>
+
+          <line x1="203" y1="105" x2="266" y2="105" class="s-line" stroke-width="1.5" marker-end="url(#ar2)"/>
+          <text x="212" y="98" font-size="10" class="s-sub">depends on</text>
+
+          <rect x="270" y="66" width="230" height="78" rx="8" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="288" y="92" font-size="12" class="s-accent-text">KnowledgeProvider</text>
+          <text x="288" y="114" font-size="11" class="s-mono">search(query, limit)</text>
+          <text x="288" y="132" font-size="10" class="s-sub">framework-free interface</text>
+
+          <line x1="503" y1="90" x2="576" y2="46" class="s-line" stroke-width="1.5" marker-end="url(#ar2)"/>
+          <line x1="503" y1="122" x2="576" y2="176" class="s-line" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+          <rect x="580" y="16" width="320" height="62" rx="8" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="598" y="40" font-size="12" class="s-ok-text">keyword &mdash; emulated, default</text>
+          <text x="598" y="62" font-size="10.5" class="s-sub">3 fixture articles, no service, deterministic</text>
+
+          <rect x="580" y="150" width="320" height="62" rx="8" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="598" y="174" font-size="12" class="s-bad-text">vector &mdash; real</text>
+          <text x="598" y="196" font-size="10.5" class="s-sub">pgvector or Vertex AI Search</text>
+
+          <rect x="270" y="176" width="230" height="40" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="288" y="201" font-size="11" class="s-mono">PROVIDER_KNOWLEDGE</text>
+          <line x1="385" y1="176" x2="385" y2="148" class="s-line" stroke-width="1.5" marker-end="url(#ar2)"/>
+
+          <text x="0" y="176" font-size="10.5" class="s-sub">the caller cannot tell</text>
+          <text x="0" y="192" font-size="10.5" class="s-sub">which adapter answered,</text>
+          <text x="0" y="208" font-size="10.5" class="s-sub">and neither can the model</text>
+        </svg>
+      </div>
+      <figcaption>One contract test suite runs against every adapter of a port, so a real implementation is held to exactly what the emulated one promised.</figcaption>
+    </figure>
+
+    <h3>The matrix, at runtime</h3>
+    <p><code>GET /api/health</code> serves this, so the boundary can be checked rather than trusted &mdash; and cannot drift away from a document:</p>
+    <pre><code>capability  mode            emulated  switchable  provider
+model       scripted        true      true        Gemini, Vertex AI, any ADK BaseLlm
+sessions    memory          true      true        Postgres via ADK DatabaseSessionService
+knowledge   keyword         true      true        Vector search: pgvector, Vertex AI Search
+identity    trusted-header  true      true        OIDC / JWT
+eventLog    memory          true      <span class="cmt">false</span>       Redis Streams, Kafka, NATS JetStream
+fanout      inprocess       true      <span class="cmt">false</span>       Redis pub/sub, NATS</code></pre>
+
+    <div class="note warn">
+      <span class="note-label">switchable: false is not a typo</span>
+      <p><code>eventLog</code> and <code>fanout</code> have no port yet &mdash; they are still hard-wired inside <code>SessionHub</code>, which owns buffering, offset assignment, replay and delivery in one class. Splitting it is surgery on the code three recovery bugs already lived in, so it lands on its own with the recovery test project as the guard.</p>
+      <p>They are listed anyway. A catalogue that quietly omits what it has not done reads as complete, which is worse than admitting the gap.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What survives a change of substrate</h2>
+    <p class="lede">The useful question about any of this is: <em>if I swapped that for the real thing, would the code around it change?</em> Where the answer is no, the mechanism is sound and the emulation is genuinely just a stand-in.</p>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-name">Ours, and unaffected by any provider</span></div>
+      <p>The wire protocol and its two counters. The four gates and the drain. The status machine and its terminal guarantee. The per-author message map that keeps parallel agents apart. The resync recovery flow. The agent graph. The eval harness. Swap every provider below the line and none of this changes.</p>
+    </div>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-name">Emulated, with a seam</span></div>
+      <p>Sessions, knowledge retrieval, identity. The interface exists, the emulated adapter is the default, and the real adapter is a config flag away. Nothing calling them knows which is answering.</p>
+    </div>
+
+    <div class="card bad">
+      <div class="card-head"><span class="card-name">Emulated, no seam yet</span></div>
+      <p>The event log and cross-instance fan-out. And one thing that is not emulated at all: <strong>there is no message store</strong>. The replay buffer is the only place agent messages exist, which is why a rolled-out transcript is unrecoverable and why a thread can come back saying its messages are gone. That is one architectural decision, not three loose ends.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>Which packages would you have to touch to replace ADK with another agent framework? Which would you not?</li>
+      <li><code>PROVIDER_KNOWLEDGE=vector</code> is set but <code>DATABASE_URL</code> is not. When does that fail, and what does the message say?</li>
+      <li>Why is <code>IdentityRequest</code> a hand-written interface rather than Express's <code>Request</code>?</li>
+      <li>A reviewer says the ports are over-engineering. What is the argument for them, and where would it stop being true?</li>
+    </ol>
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> Touch <code>packages/agents</code>, <code>packages/providers</code> (the session port is ADK's own interface) and <code>adk-adapter.ts</code>. Leave <code>apps/web</code>, <code>packages/protocol</code>, the reducer and every browser test alone. <strong>2.</strong> At startup, from <code>loadProviderConfig</code>, naming the variable &mdash; not on the first request that happens to touch retrieval. <strong>3.</strong> So the providers package never imports Express. A port that knows its callers is a shortcut with an interface drawn around it; an Express <code>Request</code> satisfies the hand-written shape structurally anyway. <strong>4.</strong> The argument is that each port has a real second implementation in view and a contract suite both must pass. It stops being true the moment a port is added for symmetry rather than for a specific second implementation &mdash; that is architecture cosplay, and it is worse than an honest hard-wiring.</p>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>
