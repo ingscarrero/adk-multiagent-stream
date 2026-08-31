@@ -216,9 +216,9 @@ uses:
 | "Where is my order, can you track shipping?" | 3 (transfer, lookupOrder, checkShippingStatus) | 17 | **23** |
 | "What is your warranty coverage?" | 2 (transfer, searchKnowledgeBase) | 17 | 19 |
 | "hello there" | 0 | 15 | 10 |
-| Research pipeline | 2, across three agents | 3 messages | 42 |
+| Research pipeline | 2, across three agents | 3 messages | **40** |
 
-So the retained window is somewhere between roughly `buffer / 42` and
+So the retained window is somewhere between roughly `buffer / 40` and
 `buffer / 10` threads depending on what you ask. Using 23:
 
 | `EVENT_RETENTION` | threads it holds | after 6 threads, a reload restores |

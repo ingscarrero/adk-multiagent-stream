@@ -223,6 +223,8 @@ Everything is optional. See [`.env.example`](.env.example).
 | `GEMINI_MODEL` | `gemini-2.5-flash` | |
 | `PORT` | `3001` | Pinned to 3001 by `pnpm dev`, so an inherited `PORT` can't move the API onto the web app's port |
 | `SSE_HEARTBEAT_MS` | `15000` | Keeps idle proxies from closing the stream |
+| `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. **Raise to ~200 to demo by hand** — at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
+| `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only |
 | `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
 | `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` | `memory` / `keyword` / `trusted-header` / `memory` | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 

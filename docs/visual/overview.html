@@ -464,7 +464,7 @@
 
           <text x="0" y="192" font-size="11" class="s-title">events = 5 + 4T + ceil(W / 3)</text>
           <text x="0" y="212" font-size="10.5" class="s-sub">5 fixed &middot; 4 per tool round trip &middot; one delta per three words. T=3, W=17 gives 23.</text>
-          <text x="0" y="232" font-size="10.5" class="s-sub">10 for a no-tool answer, 42 for the research pipeline. Under Gemini the delta count is the API's, not ours.</text>
+          <text x="0" y="232" font-size="10.5" class="s-sub">10 for a no-tool answer, 40 for the research pipeline. Under Gemini the delta count is the API's, not ours.</text>
         </svg>
       </div>
       <figcaption>Two events carry text: the deltas, and one <code>message.complete</code> holding the whole thing. The complete is authoritative &mdash; <strong>replace, do not append</strong> &mdash; which makes a lost delta self-healing rather than permanent corruption.</figcaption>
@@ -613,9 +613,14 @@
       <p>Every decision above resolves one of those ambiguities in the user's favour, and each costs something &mdash; an extra event, a wider protocol, a second wording to maintain. That is the trade the column headings are there to make visible.</p>
     </div>
 
-    <h3>The one still unresolved</h3>
-    <p>Two of the seven are only half-won, and both trace to the same root. A restored thread can say its messages are gone, but it cannot get them back &mdash; and after a long session the feed becomes mostly those notices, because the thread list grows while the readable window does not (<a href="../LIMITATIONS.md">L16</a>).</p>
-    <p>The honest wording and the quiet rendering are built. The store that would make the notice unnecessary is not, which is <a href="../LIMITATIONS.md">L7</a> and the subject of <a href="architecture.html">The Substrate Line</a>.</p>
+    <h3>Two that are only half-won</h3>
+    <p><strong>Lost history can be named but not recovered.</strong> A restored thread says its messages are gone, and after a long session the feed becomes mostly those notices, because the thread list grows while the readable window does not (<a href="../LIMITATIONS.md">L16</a>). The honest wording and the quiet rendering are built; the store that would make the notice unnecessary is not, which is <a href="../LIMITATIONS.md">L7</a> and the subject of <a href="architecture.html">The Substrate Line</a>.</p>
+
+    <p><strong>Stop is built, tested, and effectively invisible.</strong> The control renders only while a thread is non-terminal, which is right &mdash; offering to cancel something already finished is worse than not offering it. But at the default scripted pacing that window is <strong>465 ms</strong> for the router and <strong>657 ms</strong> for the research pipeline, measured off the wire. Nobody can notice a button appear, decide to use it and reach it in that time, so the feature reads as missing to anyone evaluating the app by hand.</p>
+    <p>With <code>MODEL_MODE=gemini</code> a thread runs for seconds and Stop is comfortably reachable, so this is an artefact of the scripted model being fast on purpose &mdash; the same property that makes the suite deterministic. It is still a real problem, because the first thing anyone does is <code>pnpm dev</code> and send a prompt, and <strong>a capability nobody can observe is indistinguishable from one that does not exist</strong>. Raising the pacing makes it plainly visible:</p>
+    <pre><code>SCRIPTED_CHUNK_DELAY_MS=200 TOOL_LATENCY_MS=400 pnpm dev
+<span class="cmt">// the window becomes 2.0s (router) and 4.2s (research)</span></code></pre>
+    <p>The same root cause already bit the browser suite &mdash; the cancellation specs could not reliably click Stop either, which is why <code>playwright.config.ts</code> pins <code>SCRIPTED_CHUNK_DELAY_MS: '60'</code>. That fix went to the tests and not to the human. Recorded as <a href="../LIMITATIONS.md">L17</a>.</p>
   </section>
 
   <section>
