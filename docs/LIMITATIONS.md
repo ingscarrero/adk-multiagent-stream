@@ -14,9 +14,12 @@ comments — asserting that a `resync` mechanism worked end to end when only its
 server half existed. A limitation you have written down is a design decision.
 One your docs quietly claim you solved is a trap.
 
-That gap (L1) and the counter that hid it (L13) have since been **fixed**; both
-are kept below, struck through, because the reasoning is worth more than a
-tidy list.
+Four entries have since been **fixed** — L1 and the counter that hid it (L13),
+then both correctness items, L2 and L3. All four are kept below, struck
+through, because the reasoning is worth more than a tidy list.
+
+**Nothing in the Correctness section is open.** What remains is scope,
+production readiness, performance, one observability gap and two UX ones.
 
 ---
 
@@ -25,8 +28,8 @@ tidy list.
 | | Limitation | Kind | Size |
 |---|---|---|---|
 | ~~[L1](#l1)~~ | ~~`resync` is emitted but never consumed~~ | **Fixed** | — |
-| [L2](#l2) | No per-subscriber backpressure | **Correctness** | M |
-| [L3](#l3) | Session hubs are never evicted | **Correctness** | S |
+| ~~[L2](#l2)~~ | ~~No per-subscriber backpressure~~ | **Fixed** | — |
+| ~~[L3](#l3)~~ | ~~Session hubs are never evicted~~ | **Fixed** | — |
 | [L4](#l4) | A thread cannot take a follow-up message | Scope | M |
 | [L5](#l5) | `awaiting_input` is unreachable | Scope | M |
 | [L6](#l6) | No responsive breakpoints or mobile tests | Scope | S |
@@ -51,7 +54,8 @@ Test-coverage gaps are listed separately in [TESTING.md](TESTING.md#what-is-not-
 
 ## Correctness
 
-These can lose or misrepresent what the user sees. They are the ones to fix first.
+These could lose or misrepresent what the user sees, which is why they were
+first. All three are now closed.
 
 ### L1 — ~~`resync` is emitted but never consumed~~ · FIXED {#l1}
 
@@ -132,36 +136,78 @@ the hook actually dispatches on the frame (`useFeedStream.test.ts`, with a stub
 `EventSource`). The middle two would both have passed while the feature stayed
 broken — which is exactly how it stayed broken.
 
-### L2 — No per-subscriber backpressure {#l2}
+### L2 — ~~No per-subscriber backpressure~~ · FIXED {#l2}
 
-**Where** — [`sse.ts:107`](../apps/server/src/sse.ts), the `onEntry` callback
-handed to `stream.open`, and the replay loop just below it.
+**Was** — every `res.write` discarded its return value. Node returns `false`
+when the kernel socket buffer is full and then queues the rest in process
+memory with no ceiling, so one consumer that stopped reading — a suspended
+laptop, a paused debugger, a phone that lost signal without closing the socket
+— grew server memory for as long as it stayed connected.
 
-The return value is discarded. Node returns `false` when the socket buffer is
-full and then queues writes in memory without bound.
+**Now** — writes go through `SessionHub.writeTo`, which disconnects a
+subscriber whose queue passes `SSE_MAX_BUFFERED_BYTES` (default 1 MiB).
+`res.end()` makes Express emit `close`, which runs the same detach the ordinary
+path uses, so the subscription is released through one code path rather than
+two that can drift.
 
-**Impact.** One slow or stalled consumer grows server memory for as long as it
-stays connected. There is no ceiling and no eviction.
+**The ceiling is on `writableLength`, not on the return value.** `write`
+returning `false` is normal: it means the socket buffer filled and Node took
+over queuing, which a healthy consumer drains in milliseconds. Treating that as
+the fault signal would disconnect clients on an ordinary burst. What is
+pathological is a queue that only grows, and `writableLength` is that queue.
 
-**Fix.** Check the return, pause on `'drain'`, and disconnect a subscriber that
-falls beyond a threshold, sending a `resync` first. That instruction is now
-honoured end to end ([L1](#l1)), so this is unblocked.
+**No `resync` is sent before disconnecting**, which is where this departs from
+the fix sketched here originally. It would be futile and unnecessary — futile
+because the frame joins the very queue being bounded, and unnecessary because
+the reconnect handshake already computes the answer. SSE frames are
+`\n\n`-delimited, so a half-written frame is discarded by the parser and the
+browser's `Last-Event-ID` is the last *complete* frame. Reconnecting from there
+either replays cleanly, if those offsets are still retained, or trips the
+overrun notice if they are not. Both outcomes are correct without help.
 
-### L3 — Session hubs are never evicted {#l3}
+**Tested** in `sse.test.ts` against a fake `Response`, because the assertion is
+about Node's write queue and driving a real socket into sustained backpressure
+means writing megabytes and trusting every machine's kernel buffer to behave
+alike. A draining subscriber survives 200 events; a stalled one is disconnected
+with its queue bounded near the ceiling; later events do not write to an ended
+response; and evicting one subscriber leaves its neighbours streaming. Removing
+the ceiling turns three of them red.
 
-**Where** — `HubRegistry.get` at [`sse.ts:204`](../apps/server/src/sse.ts).
+### L3 — ~~Session hubs are never evicted~~ · FIXED {#l3}
 
-Hubs are created on demand and only ever removed by `closeAll()` at shutdown.
+**Was** — hubs were created on demand and removed only by `closeAll()` at
+shutdown. Every distinct `sessionId` — every browser tab, ever — left a
+permanent hub and a permanent per-session log holding up to `EVENT_RETENTION`
+events. Retention bounded what was kept *per session*; nothing bounded the
+number of sessions, which is the wrong half to have bounded.
 
-**Impact.** Every distinct `sessionId` — every browser tab, ever — leaves a
-permanent hub, and a permanent per-session log in the `eventStream` provider
-holding up to `EVENT_RETENTION` events. Memory grows monotonically with unique
-visitors. Retention is bounded per session; the number of sessions is not, which
-is the wrong half to have bounded.
+**Now** — `HubRegistry` sweeps on an interval
+(`SESSION_SWEEP_INTERVAL_MS`, default 60s), dropping every hub that has **no
+subscribers** and has been idle past `SESSION_IDLE_TTL_MS` (default 15
+minutes).
 
-**Fix.** Record a last-activity timestamp per hub and sweep hubs that are idle
-with no subscribers. The sweep must close the stream subscription too, not just
-drop the hub — otherwise the listener stays registered against the log.
+**Sweeping the hub was not enough, and the fix originally written here would
+have missed it.** The hub is a `Set` and a timer handle; the events are the
+memory, and they live in the `eventStream` provider keyed by session. So the
+port gained `drop(sessionId)` — `sessions.delete` in the memory adapter, `DEL`
+in Redis, a documented no-op in Kafka, which has no per-key delete and lets
+topic retention do the work. It is in the contract suite, so every future
+adapter has to answer for it.
+
+Dropping also resets the session's offset counter, which matters more than it
+looks: a session id that comes back would otherwise find `oldestOffset` sitting
+above its position and resync on every connect.
+
+**Both conditions are required.** `publish` counts as activity, so a thread
+still running with nobody watching keeps its session alive — closing a tab
+mid-run does not throw the run away. And because every subscriber's detach
+closes its subscription, a hub at zero subscribers has none open, which is
+exactly the guarantee `drop` asks of its caller.
+
+**Tested** in `sse.test.ts`: a sweep drops the hub *and* the log, spares a hub
+with a live subscriber, spares an idle hub whose run is still publishing,
+restarts offsets at 1 for a returning session id, and touches only what is
+stale. Reverting to the hub-only sweep — the naive fix — turns two of them red.
 
 ---
 

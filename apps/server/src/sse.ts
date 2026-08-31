@@ -38,12 +38,24 @@ export interface SessionHubOptions {
   heartbeatMs: number;
   /** Reconnect backoff advertised to the browser via the SSE `retry:` field. */
   reconnectDelayMs: number;
+  /**
+   * Bytes Node may queue for one subscriber before it is disconnected.
+   *
+   * `res.write` returns false when the kernel socket buffer is full, and Node
+   * then queues the rest in process memory with no ceiling. A consumer that
+   * stops reading -- a suspended laptop, a paused debugger, a phone that lost
+   * signal without closing the socket -- grows that queue for as long as it
+   * stays connected. See L2 in docs/LIMITATIONS.md.
+   */
+  maxBufferedBytes: number;
 }
 
 /** Everything belonging to one browser session's feed. */
 export class SessionHub {
   private readonly subscribers = new Set<Response>();
   private heartbeat: NodeJS.Timeout | undefined;
+  private evictedCount = 0;
+  private lastActiveAt = Date.now();
 
   constructor(
     readonly sessionId: string,
@@ -55,6 +67,22 @@ export class SessionHub {
     return this.subscribers.size;
   }
 
+  /** Subscribers disconnected for lagging. Diagnostic; see L2. */
+  get evictedSubscriberCount(): number {
+    return this.evictedCount;
+  }
+
+  /**
+   * When this session last appended an event or accepted a subscriber.
+   *
+   * Read by {@link HubRegistry}'s sweeper. A thread still running with nobody
+   * watching keeps its hub alive through `publish`, so a client that closed the
+   * tab mid-run can come back to it.
+   */
+  get idleForMs(): number {
+    return Date.now() - this.lastActiveAt;
+  }
+
   /**
    * Appends an event to the session's stream.
    *
@@ -62,6 +90,7 @@ export class SessionHub {
    * the append so ordering is preserved when the stream is remote.
    */
   async publish(event: FeedEvent): Promise<StreamEntry> {
+    this.lastActiveAt = Date.now();
     return this.stream.append(this.sessionId, event);
   }
 
@@ -104,14 +133,15 @@ export class SessionHub {
     const subscription = await this.stream.open(
       this.sessionId,
       resuming ? since : null,
-      (entry) => res.write(formatFrame(entry)),
+      (entry) => this.writeTo(res, formatFrame(entry)),
     );
 
     this.writeResyncIfPrefixMissing(res, resuming ? since : null, subscription);
-    for (const entry of subscription.replay) res.write(formatFrame(entry));
+    for (const entry of subscription.replay) this.writeTo(res, formatFrame(entry));
     subscription.flush();
 
     this.subscribers.add(res);
+    this.lastActiveAt = Date.now();
     this.ensureHeartbeat();
 
     return () => {
@@ -152,6 +182,49 @@ export class SessionHub {
   }
 
   /**
+   * Writes one frame, and disconnects a subscriber that has stopped draining.
+   *
+   * `res.write` returning false is normal and not itself a problem -- it means
+   * the socket buffer is full and Node has taken over queuing, which a healthy
+   * consumer drains in milliseconds. The problem is a consumer that never
+   * drains: nothing bounds that queue, so one stalled client grows server
+   * memory for as long as it stays connected.
+   *
+   * `writableLength` is the size of that queue, so the ceiling goes there
+   * rather than on the return value.
+   *
+   * **No resync is sent before disconnecting**, which is where this differs
+   * from the fix originally sketched in L2. It would be futile and unnecessary:
+   * futile because the frame joins the very queue being bounded, and
+   * unnecessary because the reconnect handshake already computes the answer.
+   * SSE frames are `\n\n`-delimited, so a half-written frame is discarded by
+   * the parser and the browser's `Last-Event-ID` is the last *complete* frame.
+   * Reconnecting from there either replays cleanly, if those offsets are still
+   * retained, or trips {@link writeResyncIfPrefixMissing} if they are not.
+   * Both outcomes are correct and neither needs help here.
+   */
+  private writeTo(res: Response, frame: string): void {
+    if (res.writableEnded) return;
+    res.write(frame);
+    if (res.writableLength > this.options.maxBufferedBytes) this.evictLagging(res);
+  }
+
+  /**
+   * Drops a subscriber that exceeded its buffer ceiling.
+   *
+   * `end()` closes the response, which makes Express emit `close` on the
+   * request, which runs the detach returned by {@link subscribe} -- so the
+   * subscription is released through the ordinary path rather than a second
+   * one that could drift from it.
+   */
+  private evictLagging(res: Response): void {
+    if (!this.subscribers.delete(res)) return;
+    this.evictedCount += 1;
+    if (this.subscribers.size === 0) this.stopHeartbeat();
+    res.end();
+  }
+
+  /**
    * Comment-only heartbeat.
    *
    * Idle proxies and load balancers close connections that go quiet, and a
@@ -161,7 +234,9 @@ export class SessionHub {
   private ensureHeartbeat(): void {
     if (this.heartbeat || this.options.heartbeatMs <= 0) return;
     this.heartbeat = setInterval(() => {
-      for (const subscriber of this.subscribers) subscriber.write(': heartbeat\n\n');
+      // Snapshot: writeTo can evict, and mutating the set mid-iteration is how
+      // a heartbeat quietly starts skipping subscribers.
+      for (const subscriber of [...this.subscribers]) this.writeTo(subscriber, ': heartbeat\n\n');
     }, this.options.heartbeatMs);
     this.heartbeat.unref?.();
   }
@@ -192,14 +267,44 @@ export function formatFrame({ offset, event }: StreamEntry): string {
   return `id: ${offset}\nevent: ${SSE_EVENT_NAME}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-/** Owns the hubs, one per browser session, over a shared event stream. */
+export interface HubRegistryOptions extends SessionHubOptions {
+  /**
+   * How long a hub with no subscribers may sit before it is swept.
+   *
+   * Generous on purpose: a reload, a tunnel, or a laptop lid is measured in
+   * seconds to minutes, and sweeping a session someone is coming back to
+   * costs them their history for no benefit.
+   */
+  idleTtlMs: number;
+  /** How often to sweep. Zero disables it, which is what the tests want. */
+  sweepIntervalMs: number;
+}
+
+/**
+ * Owns the hubs, one per browser session, over a shared event stream.
+ *
+ * ## Why this sweeps, and why sweeping the hub is not enough
+ *
+ * Hubs are created on demand and every distinct `sessionId` -- every browser
+ * tab, ever -- makes one. Retention bounds what is kept *per session*; nothing
+ * bounded the number of sessions, so memory grew monotonically with unique
+ * visitors (L3).
+ *
+ * The hub object is the small half. The events are the large half, and they
+ * live in the {@link EventStream}, keyed by session, up to `EVENT_RETENTION`
+ * each. So the sweep drops both: evicting the hub and leaving the log behind
+ * would free a `Set` and a timer handle while the actual memory stayed.
+ */
 export class HubRegistry {
   private readonly hubs = new Map<string, SessionHub>();
+  private sweeper: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly stream: EventStream,
-    private readonly options: SessionHubOptions,
-  ) {}
+    private readonly options: HubRegistryOptions,
+  ) {
+    this.startSweeper();
+  }
 
   get(sessionId: string): SessionHub {
     let hub = this.hubs.get(sessionId);
@@ -210,7 +315,47 @@ export class HubRegistry {
     return hub;
   }
 
+  get size(): number {
+    return this.hubs.size;
+  }
+
+  /**
+   * Drops every hub that is idle and unwatched, and the session's log with it.
+   *
+   * Two conditions, both required. **No subscribers**, so nothing is reading;
+   * because every subscriber's detach closes its subscription, a hub at zero
+   * has no open subscriptions and `drop` gets the guarantee the port asks for.
+   * **Idle past the TTL**, where `publish` counts as activity -- a thread still
+   * running with nobody watching keeps its session alive, so closing a tab
+   * mid-run does not throw the run away.
+   *
+   * Returns the number swept, so a test can assert on it rather than on timing.
+   */
+  async sweepIdle(): Promise<number> {
+    const stale = [...this.hubs.values()].filter(
+      (hub) => hub.subscriberCount === 0 && hub.idleForMs >= this.options.idleTtlMs,
+    );
+    for (const hub of stale) {
+      hub.close();
+      this.hubs.delete(hub.sessionId);
+      await this.stream.drop(hub.sessionId);
+    }
+    return stale.length;
+  }
+
+  private startSweeper(): void {
+    if (this.options.sweepIntervalMs <= 0) return;
+    this.sweeper = setInterval(() => {
+      // Nothing awaits this: a sweep failing must not take the process down,
+      // and the next tick retries whatever it missed.
+      void this.sweepIdle().catch(() => {});
+    }, this.options.sweepIntervalMs);
+    this.sweeper.unref?.();
+  }
+
   closeAll(): void {
+    if (this.sweeper) clearInterval(this.sweeper);
+    this.sweeper = undefined;
     for (const hub of this.hubs.values()) hub.close();
     this.hubs.clear();
   }

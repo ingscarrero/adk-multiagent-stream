@@ -442,10 +442,19 @@ data: {"type":"message.delta", ...}
       <p><strong>The open/flush shape is a race fix.</strong> A subscriber needs the backlog <em>and</em> everything after it. Calling <code>replay()</code> then <code>subscribe()</code> drops whatever lands between the two, so <code>open</code> does both at once and holds live entries until the caller has written the backlog.</p>
     </div>
 
-    <div class="card bad">
-      <div class="card-head"><span class="card-num">05</span><span class="card-name">Two things this file does not do</span></div>
-      <p><strong>Backpressure.</strong> <code>subscriber.write(frame)</code> discards its return value. Node returns <code>false</code> when the socket buffer is full and then queues in memory without bound, so one stalled consumer grows the server for as long as it stays connected.</p>
-      <p><strong>Eviction.</strong> <code>HubRegistry</code> creates hubs on demand and only removes them at shutdown. The buffer is bounded per session; the number of sessions is not, which is the wrong half to have bounded.</p>
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">05</span><span class="card-name">A subscriber that stops draining is disconnected</span></div>
+      <p>Every write goes through <code>writeTo</code>, which drops a subscriber once <code>res.writableLength</code> passes <code>SSE_MAX_BUFFERED_BYTES</code> &mdash; 1&nbsp;MiB by default.</p>
+      <p><strong>The ceiling is on the queue, not on the return value.</strong> <code>res.write</code> returning <code>false</code> is ordinary: the kernel socket buffer filled and Node took over queuing, which a healthy consumer drains in milliseconds. Treating that as the fault signal would disconnect people during a normal burst. What is pathological is a queue that only ever grows &mdash; a suspended laptop, a paused debugger, a phone that lost signal without closing the socket &mdash; and <code>writableLength</code> is that queue.</p>
+      <p><strong>Nothing is sent before the disconnect</strong>, and that is deliberate. Writing a <code>resync</code> first is the obvious courtesy and it is both futile and unnecessary: futile because the frame joins the very queue being bounded, unnecessary because the reconnect handshake already works this out. Frames are <code>\n\n</code>-delimited, so a half-written frame is discarded by the parser and the browser's <code>Last-Event-ID</code> is the last <em>complete</em> one. Coming back from there either replays cleanly, if those offsets are still retained, or trips the overrun notice above. Both are correct with no help from here.</p>
+      <p><code>res.end()</code> makes Express emit <code>close</code>, which runs the same detach an ordinary disconnect uses &mdash; so the subscription is released through one path rather than two that can drift apart.</p>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">06</span><span class="card-name">Idle sessions are swept, and the log goes with them</span></div>
+      <p><code>HubRegistry</code> sweeps on an interval, dropping every hub with no subscribers that has been idle past <code>SESSION_IDLE_TTL_MS</code> &mdash; fifteen minutes by default, generous because a reload or a closed laptop lid is measured in seconds and sweeping a session someone is returning to costs them their history for nothing.</p>
+      <p><strong>Sweeping the hub is the small half.</strong> A hub is a <code>Set</code> and a timer handle. The events are the memory, and they live in the <code>EventStream</code> keyed by session, up to <code>EVENT_RETENTION</code> each. So the sweep also calls <code>stream.drop(sessionId)</code>; freeing the hub alone would reclaim almost nothing while reading as a fix.</p>
+      <p><strong>Both conditions are required, and the second is why a closed tab is safe.</strong> <code>publish</code> counts as activity, so a thread still running with nobody watching keeps its session alive and the run is there when the user comes back. And because every subscriber's detach closes its subscription, a hub at zero subscribers has none open &mdash; which is exactly the guarantee <code>drop</code> asks of whoever calls it.</p>
     </div>
   </section>
 

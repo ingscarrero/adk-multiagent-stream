@@ -232,7 +232,9 @@ The complete register — including gaps that are *not* deliberate — is
 
 - **In-memory everything.** Sessions, threads, the event log. Each now has a
   port, so each is a config change rather than a refactor — but only the
-  emulated adapters are written ([L7](LIMITATIONS.md#l7)).
+  emulated adapters are written ([L7](LIMITATIONS.md#l7)). Memory is at least
+  bounded in both directions now: per session by `EVENT_RETENTION`, and across
+  sessions by an idle sweep ([L3](LIMITATIONS.md#l3)).
 - **Single instance.** One process owns a session's log and its subscribers.
   Multi-instance needs the Redis `eventStream` adapter, or sticky sessions
   ([L8](LIMITATIONS.md#l8)).

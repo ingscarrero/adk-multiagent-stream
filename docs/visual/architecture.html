@@ -375,6 +375,12 @@ eventStream memory          true      true        Redis Streams, Kafka, NATS Jet
       <p>Sessions, knowledge retrieval, identity, the event log. The interface exists, the emulated adapter is the default, and the real adapter is a config flag away. Nothing calling them knows which is answering.</p>
     </div>
 
+    <div class="card ok">
+      <div class="card-head"><span class="card-name">Bounded on both axes, in memory or not</span></div>
+      <p>Two ceilings that a real provider does not remove, because they are the app's job either way. <code>EVENT_RETENTION</code> bounds how much is kept <em>per session</em>. An idle sweep bounds <em>how many sessions</em> &mdash; it drops a hub that has no subscribers and has gone quiet, and calls <code>drop</code> on the log with it, because the hub is a <code>Set</code> and a timer handle while the events are the memory.</p>
+      <p>And one ceiling per consumer: a subscriber whose write queue passes <code>SSE_MAX_BUFFERED_BYTES</code> is disconnected, so a client that stops reading cannot grow the process indefinitely. Swapping the memory stream for Redis does not retire any of these; it makes the last one matter more, because the resource being protected is then shared between instances.</p>
+    </div>
+
     <div class="card bad">
       <div class="card-head"><span class="card-name">Not emulated &mdash; simply absent</span></div>
       <p><strong>There is no message store.</strong> The event stream is the only place agent messages exist, which is why a rolled-out transcript is unrecoverable and why a thread can come back saying its messages are gone. In production the stream would be a fast tail in front of a durable store; here it is doing both jobs. That is one architectural decision, not three loose ends.</p>

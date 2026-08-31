@@ -16,6 +16,12 @@ export interface ServerConfig {
   heartbeatMs: number;
   /** Reconnect backoff advertised to the browser, in ms. */
   reconnectDelayMs: number;
+  /** Bytes queued for one subscriber before it is disconnected. See L2. */
+  maxBufferedBytes: number;
+  /** How long an unwatched session may sit before it is swept. See L3. */
+  idleTtlMs: number;
+  /** How often to sweep. */
+  sweepIntervalMs: number;
   /**
    * Which adapter backs each capability the app does not implement itself.
    *
@@ -35,6 +41,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     modelMode: resolveModelMode(env),
     heartbeatMs: Number(env['SSE_HEARTBEAT_MS'] ?? 15_000),
     reconnectDelayMs: Number(env['SSE_RETRY_MS'] ?? 1000),
+    // 1 MiB is roughly forty seconds of a busy feed. Large enough that a brief
+    // stall is absorbed rather than punished, small enough that a hundred
+    // stalled clients cannot exhaust a small container.
+    maxBufferedBytes: Number(env['SSE_MAX_BUFFERED_BYTES'] ?? 1_048_576),
+    idleTtlMs: Number(env['SESSION_IDLE_TTL_MS'] ?? 900_000),
+    sweepIntervalMs: Number(env['SESSION_SWEEP_INTERVAL_MS'] ?? 60_000),
     providers: loadProviderConfig(env),
   };
 }

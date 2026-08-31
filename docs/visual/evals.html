@@ -403,7 +403,7 @@ thresholds: trajectory &gt;= 1, response &gt;= 0.5
       </table>
     </div>
 
-    <p>The dual run matters more than it sounds. An evalset that only runs on demand is documentation; one that runs in CI is a contract. Putting it inside <code>pnpm test</code> means the 6 cases are as load-bearing as the 217 unit tests around them.</p>
+    <p>The dual run matters more than it sounds. An evalset that only runs on demand is documentation; one that runs in CI is a contract. Putting it inside <code>pnpm test</code> means the 6 cases are as load-bearing as the 231 unit tests around them.</p>
 
     <h3>Against the runner, not the server</h3>
     <p><code>runEvalCase</code> drives <code>InMemoryRunner</code> directly rather than going through HTTP. Evals grade the <em>agent</em>; routing them through the transport means a failing case could be the agent, the adapter, the hub, or the buffer. <code>chunkDelayMs: 0</code> for the same reason &mdash; streaming timing is <a href="e2e.html">the browser suite's</a> problem, not this one.</p>

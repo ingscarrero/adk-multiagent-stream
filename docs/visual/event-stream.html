@@ -265,7 +265,7 @@
           <tr><td>Consumer groups</td><td><span class="chip chip--bad">no</span></td><td>no competing consumers; nobody is dividing work</td></tr>
           <tr><td>Exactly-once</td><td><span class="chip chip--bad">no</span></td><td>at-least-once plus an idempotent consumer, which is the achievable version</td></tr>
           <tr><td>Log compaction</td><td><span class="chip chip--bad">no</span></td><td>no keyed state to collapse; the transcript is the value</td></tr>
-          <tr><td>Backpressure</td><td><span class="chip chip--bad">no</span></td><td>a slow subscriber is buffered without bound (L2)</td></tr>
+          <tr><td>Backpressure</td><td><span class="chip chip--warn">partly</span></td><td>no flow control, and no need for it &mdash; SSE has no reverse channel to signal with. A subscriber whose write queue passes a ceiling is disconnected instead, and reconnects (L2)</td></tr>
           <tr><td>Durability</td><td><span class="chip chip--bad">no</span></td><td>an array in one process; a restart loses everything</td></tr>
         </tbody>
       </table>
@@ -339,6 +339,7 @@
     <pre><code>interface EventStream {
   append(sessionId, event): Promise&lt;StreamEntry&gt;;
   open(sessionId, afterOffset, onEntry): Promise&lt;StreamSubscription&gt;;
+  drop(sessionId): Promise&lt;void&gt;;   <span class="cmt">// forget one session entirely</span>
   close(): Promise&lt;void&gt;;
 }
 
@@ -352,6 +353,22 @@ interface StreamSubscription {
     <h3>The memory adapter</h3>
     <p>An array and a <code>Set</code> of listeners per session. <code>append</code> pushes, assigns <code>nextOffset++</code>, splices the array down to the retention limit, then calls every listener. <code>oldestOffset</code> is <code>entries[0].offset</code>, or the next offset when the log is empty.</p>
     <p>It is correct for one process and cannot work across instances: another instance holds a different array, so a client that reconnects there finds nothing to replay. That is the entire reason a real adapter is worth building.</p>
+
+    <h3>Retention bounds one axis; <code>drop</code> bounds the other</h3>
+    <p>Retention answers <em>how much do we keep per session</em>. Nothing answered <em>how many sessions do we keep</em>, and the answer was all of them &mdash; every browser tab that ever connected left a log behind, each holding up to <code>EVENT_RETENTION</code> events, for the life of the process. Bounding the first while leaving the second open is bounding the wrong half.</p>
+    <p><code>drop(sessionId)</code> is the second bound. The SSE hub sweeps sessions that have no subscribers and have gone quiet, and calls it. The caller guarantees no subscription is open, so an adapter may assume it has no listeners to notify, and dropping an unknown session is a no-op rather than an error &mdash; the sweeper races with sessions that were never written to.</p>
+    <p>It also resets the session's offset counter, which matters more than it first looks. A session id that comes back would otherwise find <code>oldestOffset</code> sitting far above its position and be told to resync on every single connect.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Adapter</th><th class="mono">drop</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>memory</td><td class="mono">sessions.delete(id)</td><td>Frees the array and its listener set together</td></tr>
+          <tr><td>Redis Streams</td><td class="mono">DEL feed:{id}</td><td>One key per session, so this is exact</td></tr>
+          <tr><td>Kafka</td><td class="mono">&mdash;</td><td>No per-key delete. A documented no-op, letting topic retention do the work &mdash; which is why the port returns nothing and promises only that resources are released where that is possible</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>It is part of the contract suite, so a future adapter cannot quietly skip it.</p>
 
     <h3>Why open and flush are one operation</h3>
     <p>A subscriber needs the backlog <em>and</em> everything after it, with nothing lost in between. Calling <code>replay()</code> and then <code>subscribe()</code> drops whatever is appended between the two &mdash; a race that is rare, silent, and produces exactly the kind of gap the reducer then stalls on.</p>
@@ -417,7 +434,7 @@ interface StreamSubscription {
 
     <h3>What Redis still does not fix</h3>
     <p>A shared stream makes multi-instance possible and survives a restart, and it does <em>not</em> give the feed a message store. The stream would still be a bounded window, so a rolled-out transcript is still unrecoverable and a thread can still come back saying its messages are gone. In production the stream is a fast tail in front of a durable store; here it would still be doing both jobs. That is a separate decision, recorded as L7.</p>
-    <p>Backpressure is untouched too: a slow subscriber is still buffered without bound (L2). Redis makes that <em>more</em> pressing, not less, because a stalled consumer now holds a connection to shared infrastructure.</p>
+    <p>Backpressure is no longer the open question it was when this page was written &mdash; the hub now disconnects a subscriber whose write queue passes a ceiling (L2, and card 05 of <a href="sse-hub.html">One Wire, Many Threads</a>). Redis does not change that bound, but it does raise the stakes behind it: a stalled consumer would then be holding a connection to shared infrastructure rather than to one process, so the ceiling protects a resource several instances are competing for.</p>
   </section>
 
   <section>
