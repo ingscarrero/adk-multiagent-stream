@@ -27,12 +27,23 @@ on the critical path of CI.
 
 | Layer | Runner | Count | What it proves |
 |---|---|---|---|
-| Protocol & reducer | Vitest (node/jsdom) | ~50 | Ordering rules, status machine, wire schemas |
-| ADK integration | Vitest (node) | ~20 | Agents actually run under a real `Runner`; adapter maps events correctly |
-| HTTP & SSE | Vitest (node) | ~16 | Real server, real stream, concurrency, reconnect, cancellation |
-| Browser | Playwright | 59 | The whole thing, in two engines |
+| Protocol, reducer & components | Vitest (node/jsdom) | 95 | Ordering rules, status machine, wire schemas, the stream hook |
+| Server | Vitest (node) | 38 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation |
+| Providers | Vitest (node) | 25 | Config validation, and a port contract every adapter must satisfy |
+| Evals | Vitest (node) | 25 | Retrieval metrics and the agent regression gate |
+| ADK integration | Vitest (node) | 23 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
+| Browser | Playwright | 63 | The whole stack, in two engines plus a small-buffer recovery project |
 
-Plus 6 eval cases, which run both as a CLI and inside `pnpm test`.
+206 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
+CLI and inside the unit suite.
+
+### Contract tests
+
+`packages/providers` is tested through its *ports*, not its implementations:
+`knowledgeContract(name, make)` is a suite any `KnowledgeProvider` must pass. The
+keyword adapter runs it today; a vector adapter will run the identical suite, so
+a divergence between them surfaces as a failure rather than as a surprise in
+production.
 
 ### Layer 1 — the reducer is where ordering is really tested
 

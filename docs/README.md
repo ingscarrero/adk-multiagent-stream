@@ -8,6 +8,7 @@
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | How the pieces fit, and the ADK behaviours worth knowing before reading the code. |
 | **[TESTING.md](TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[LIMITATIONS.md](LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
+| **[PROVIDERS.md](PROVIDERS.md)** | What is emulated versus what a real provider would serve, and where each seam is. |
 
 ## Visual deep-dives
 
@@ -15,12 +16,13 @@ Long-form pages for mechanisms that a diagram explains faster than prose. Open
 them straight from the filesystem — each is one self-contained HTML file with no
 build step, no bundler, and no assets beyond a Google Fonts link.
 
-One page per load-bearing file. Each opens with the mechanism, then the details
+One overview, then one page per load-bearing file. Each opens with the mechanism, then the details
 that are easy to get wrong, then a short set of trace-it-yourself questions.
-Every page links to the other four, so the set reads in any order.
+Every page links to the other five, so the set reads in any order.
 
 | Page | File it explains |
 |---|---|
+| **[visual/architecture.html](visual/architecture.html)**<br>*The Substrate Line* | the system as a whole — the two rules that shape it, and the line between logic this repo implements and infrastructure it stands in for. **Start here.** |
 | **[visual/reducer-gates.html](visual/reducer-gates.html)**<br>*Four Gates and a Drain* | `apps/web/src/feed/reducer.ts` — the three outcomes, the four gates, the drain loop, eight worked traces including resync recovery |
 | **[visual/adk-adapter.html](visual/adk-adapter.html)**<br>*Many Authors, One Feed* | `apps/server/src/adk-adapter.ts` — the ADK seam, the per-author Map, translation order, who owns status |
 | **[visual/sse-hub.html](visual/sse-hub.html)**<br>*One Wire, Many Threads* | `apps/server/src/sse.ts` — multiplexing, the two counters, the priming frame, and the resync exchange frame by frame |

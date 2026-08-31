@@ -47,6 +47,9 @@ importers:
       '@feed/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@feed/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@google/adk':
         specifier: 2.0.0
         version: 2.0.0(express@5.2.1)
@@ -136,6 +139,9 @@ importers:
 
   packages/agents:
     dependencies:
+      '@feed/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@google/adk':
         specifier: 2.0.0
         version: 2.0.0(express@5.2.1)
@@ -167,6 +173,12 @@ importers:
       zod:
         specifier: 4.5.4
         version: 4.5.4
+
+  packages/providers:
+    dependencies:
+      '@google/adk':
+        specifier: 2.0.0
+        version: 2.0.0(express@5.2.1)
 
 packages:
 

@@ -184,7 +184,7 @@
     <h1>One Wire, Many Threads</h1>
     <p class="standfirst">A single connection carrying every thread, the two counters that keep them straight, and the one byte that makes the handshake complete.</p>
     <span class="filepath">apps/server/src/sse.ts</span>
-    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+    <p class="siblings">Also in this set: <a href="architecture.html">The Substrate Line</a> &middot; <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
   </header>
 
 
@@ -435,8 +435,14 @@ data: {"type":"message.delta", ...}
       <p><code>publish</code> writes to the buffer whether or not anyone is connected. A thread started before the stream opens &mdash; or while the browser is reconnecting &mdash; must not lose its events, and this is what makes the late-subscriber case work at all.</p>
     </div>
 
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">04</span><span class="card-name">This class is two capabilities in a trench coat</span></div>
+      <p>It owns the <strong>event log</strong> (the buffer, offset assignment, retention, replay) and the <strong>fan-out</strong> (who is connected, who gets each frame). In production those are separate things &mdash; Redis Streams or Kafka for one, Redis pub/sub or NATS for the other &mdash; and separating them is what would let this run on more than one instance.</p>
+      <p>They are the only capabilities in <a href="architecture.html">the catalogue</a> still marked <code>switchable: false</code>. Splitting them is surgery on the code three recovery bugs already lived in, so it lands on its own with the recovery test project as the guard rather than riding along with something else.</p>
+    </div>
+
     <div class="card bad">
-      <div class="card-head"><span class="card-num">04</span><span class="card-name">Two things this file does not do</span></div>
+      <div class="card-head"><span class="card-num">05</span><span class="card-name">Two things this file does not do</span></div>
       <p><strong>Backpressure.</strong> <code>subscriber.write(frame)</code> discards its return value. Node returns <code>false</code> when the socket buffer is full and then queues in memory without bound, so one stalled consumer grows the server for as long as it stays connected.</p>
       <p><strong>Eviction.</strong> <code>HubRegistry</code> creates hubs on demand and only removes them at shutdown. The buffer is bounded per session; the number of sessions is not, which is the wrong half to have bounded.</p>
     </div>

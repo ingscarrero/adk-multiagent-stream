@@ -12,6 +12,7 @@
 
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
+import { keywordKnowledge, type KnowledgeProvider } from '@feed/providers';
 
 /** Deterministic fake latency so tool states are observable in the UI and in tests. */
 const TOOL_LATENCY_MS = Number(process.env['TOOL_LATENCY_MS'] ?? 150);
@@ -25,26 +26,6 @@ const ORDERS: Record<string, { status: string; items: string[]; eta: string }> =
   'A-1003': { status: 'delivered', items: ['Monitor arm'], eta: '2026-08-24' },
 };
 
-const KB: Array<{ id: string; title: string; body: string; tags: string[] }> = [
-  {
-    id: 'kb-returns',
-    title: 'Return policy',
-    body: 'Unopened items may be returned within 30 days for a full refund. Opened items incur a 15% restocking fee.',
-    tags: ['return', 'refund', 'policy'],
-  },
-  {
-    id: 'kb-shipping',
-    title: 'Shipping times',
-    body: 'Standard shipping is 3-5 business days. Express is next business day when ordered before 2pm.',
-    tags: ['shipping', 'delivery', 'time'],
-  },
-  {
-    id: 'kb-warranty',
-    title: 'Warranty coverage',
-    body: 'Hardware carries a 2 year limited warranty covering manufacturing defects, not accidental damage.',
-    tags: ['warranty', 'repair', 'defect'],
-  },
-];
 
 export const lookupOrder = new FunctionTool({
   name: 'lookupOrder',
@@ -62,29 +43,31 @@ export const lookupOrder = new FunctionTool({
   },
 });
 
-export const searchKnowledgeBase = new FunctionTool({
-  name: 'searchKnowledgeBase',
-  description: 'Search the support knowledge base for articles matching a query.',
-  parameters: z.object({
-    query: z.string().describe('Free-text search query.'),
-    limit: z.number().int().min(1).max(5).default(3).describe('Maximum articles to return.'),
-  }),
-  async execute({ query, limit }) {
-    await sleep(TOOL_LATENCY_MS);
-    const terms = query.toLowerCase().split(/\W+/).filter(Boolean);
-    const scored = KB.map((article) => ({
-      article,
-      score: terms.filter(
-        (term) => article.tags.some((tag) => tag.includes(term)) || article.title.toLowerCase().includes(term),
-      ).length,
-    }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+/**
+ * Builds the knowledge tool over whichever retrieval provider is configured.
+ *
+ * The tool's shape &mdash; its name, description and parameters, which is all
+ * the model ever sees &mdash; is identical whether the provider behind it is
+ * keyword matching over fixtures or a vector search. That is the whole point of
+ * the port: swapping retrieval does not change the agent.
+ */
+export function createSearchKnowledgeBase(knowledge: KnowledgeProvider) {
+  return new FunctionTool({
+    name: 'searchKnowledgeBase',
+    description: 'Search the support knowledge base for articles matching a query.',
+    parameters: z.object({
+      query: z.string().describe('Free-text search query.'),
+      limit: z.number().int().min(1).max(5).default(3).describe('Maximum articles to return.'),
+    }),
+    async execute({ query, limit }) {
+      await sleep(TOOL_LATENCY_MS);
+      return { query, results: await knowledge.search(query, limit) };
+    },
+  });
+}
 
-    return { query, results: scored.map(({ article }) => article) };
-  },
-});
+/** The default instance, backed by the emulated keyword provider. */
+export const searchKnowledgeBase = createSearchKnowledgeBase(keywordKnowledge());
 
 export const checkShippingStatus = new FunctionTool({
   name: 'checkShippingStatus',

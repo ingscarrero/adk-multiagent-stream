@@ -17,8 +17,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { InMemorySessionService, Runner, StreamingMode } from '@google/adk';
+import { Runner, StreamingMode, type BaseSessionService } from '@google/adk';
 import { createAgent, type AgentId } from '@feed/agents';
+import { memorySessions, type KnowledgeProvider } from '@feed/providers';
 import {
   assertTransition,
   parseFeedEvent,
@@ -45,16 +46,33 @@ export interface ThreadRunnerOptions {
   chunkDelayMs?: number;
   /** Guards against a runaway agent loop burning the whole budget. */
   maxLlmCalls?: number;
+  /**
+   * Where conversation state lives.
+   *
+   * Supplied by the session provider rather than constructed here, so swapping
+   * in ADK's `DatabaseSessionService` is a config change and not an edit to
+   * this file. Defaults to in-memory for tests that do not care.
+   */
+  sessionService?: BaseSessionService;
+  /**
+   * Retrieval backing the knowledge tool.
+   *
+   * Threaded through to `createAgent` so a swap of `PROVIDER_KNOWLEDGE` reaches
+   * the agents without this file knowing which adapter it is.
+   */
+  knowledge?: KnowledgeProvider;
 }
 
 export class ThreadRunner {
   private readonly threads = new Map<string, ThreadRecord>();
   private readonly aborts = new Map<string, AbortController>();
   private readonly sequences = new Map<string, number>();
-  private readonly sessionService = new InMemorySessionService();
+  private readonly sessionService: BaseSessionService;
   private readonly inFlight = new Set<Promise<void>>();
 
-  constructor(private readonly options: ThreadRunnerOptions = {}) {}
+  constructor(private readonly options: ThreadRunnerOptions = {}) {
+    this.sessionService = options.sessionService ?? memorySessions().service();
+  }
 
   get(threadId: string): ThreadRecord | undefined {
     return this.threads.get(threadId);
@@ -184,6 +202,7 @@ export class ThreadRunner {
           ...(this.options.chunkDelayMs !== undefined
             ? { chunkDelayMs: this.options.chunkDelayMs }
             : {}),
+          ...(this.options.knowledge ? { knowledge: this.options.knowledge } : {}),
         }),
         sessionService: this.sessionService,
       });
