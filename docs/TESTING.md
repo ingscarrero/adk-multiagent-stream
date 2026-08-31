@@ -183,10 +183,35 @@ gaps) live in [LIMITATIONS.md](LIMITATIONS.md):
 - **Visual regression.** No screenshot comparison; layout changes are unguarded.
 - **Mobile viewports.** The CSS is responsive but only desktop sizes are run.
 
-## Testing replay and resync by hand
+## Testing by hand: two things the defaults hide
+
+The default configuration is tuned for the test suite, and two behaviours become
+effectively unobservable as a result. Each has a dev mode.
+
+| | Why the default hides it | Run |
+|---|---|---|
+| **Replay and resync** | An overrun needs ~25 prompts at a 500-event retention | `pnpm dev:recovery` |
+| **Cancellation** | A thread finishes in ~0.5s, so Stop appears and vanishes before you can click it | `pnpm dev:demo` |
+
+### Cancellation
+
+`Stop` renders only while a thread is non-terminal, which is correct and also
+means it exists for **465 ms** on the router and **657 ms** on the research
+pipeline at the default pacing. `pnpm dev:demo` raises
+`SCRIPTED_CHUNK_DELAY_MS` to 200 and `TOOL_LATENCY_MS` to 400, which widens
+those to 2.0 s and 4.2 s.
+
+Send a research prompt, click Stop while it streams, and the thread should
+settle to `cancelled` with its messages cut mid-sentence, the synthesiser never
+running, and every other thread untouched. This is [L17](LIMITATIONS.md#l17),
+and the browser suite hit the same wall &mdash; `playwright.config.ts` pins
+`SCRIPTED_CHUNK_DELAY_MS: '60'` for its own servers so the cancellation specs
+can land a click.
+
+### Replay and resync
 
 Recovery only happens when the replay buffer overflows, which on the default
-500-event buffer takes about twenty-five prompts. That impracticality is the
+500-event retention takes about twenty-five prompts. That impracticality is the
 direct cause of three shipped bugs, so there is a dev mode for it:
 
 ```bash

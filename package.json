@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:demo": "pnpm --parallel --filter \"./apps/*\" dev:demo",
     "dev:server": "pnpm --filter @feed/server dev",
     "dev:web": "pnpm --filter @feed/web dev",
     "dev:recovery": "pnpm --parallel --filter \"./apps/*\" dev:recovery",

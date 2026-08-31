@@ -330,52 +330,6 @@ alerting: `droppedLossy > 0` is the one number worth wiring to something.
 
 ## User experience
 
-### L17 — Stop cannot be clicked by hand in scripted mode {#l17}
-
-**Where** — `SCRIPTED_CHUNK_DELAY_MS` (default 25) in
-[`scripted-llm.ts`](../packages/agents/src/scripted-llm.ts) and
-`TOOL_LATENCY_MS` (default 150) in
-[`tools.ts`](../packages/agents/src/tools.ts).
-
-The Stop control renders only while a thread's status is non-terminal
-([`ThreadCard.tsx`](../apps/web/src/feed/ThreadCard.tsx), `const active =
-!isTerminal(thread.status)`), which is correct: offering to cancel something
-already finished is worse than not offering it.
-
-At the default pacing that window is **465 ms** for the order-tracking prompt
-and **657 ms** for the research pipeline, measured off the wire. A person cannot
-notice a control appear, decide to use it and reach it in that time. The feature
-is fully built, wired and tested, and reads as missing to anyone evaluating the
-app by hand.
-
-**Why it is not a defect in the feature.** With `MODEL_MODE=gemini` a thread
-runs for seconds and Stop is comfortably reachable. The 465 ms is an artefact of
-the scripted model being fast on purpose — the same property that makes the test
-suite deterministic.
-
-**Why it is still a real problem.** The first thing anyone does with this repo
-is `pnpm dev`, send a prompt, and look at what happens. Cancellation is one of
-the more interesting things it does, and at the default it is invisible. A
-capability nobody can observe is indistinguishable from one that does not exist.
-
-The same root cause already bit the browser suite: the cancellation specs could
-not reliably click Stop either, which is why `playwright.config.ts` pins
-`SCRIPTED_CHUNK_DELAY_MS: '60'` for its web servers. That fix was applied to the
-tests and not to the human.
-
-**Fix.** Partly done: both knobs are now documented in
-[`.env.example`](../.env.example) and the README config table, with the value to
-use for a demo. What is not done is making the default watchable —
-
-```bash
-SCRIPTED_CHUNK_DELAY_MS=200 TOOL_LATENCY_MS=400 pnpm dev
-```
-
-is a fine workaround and a bad default, because it slows the thing every
-first-time reader sees. The options are a `pnpm dev:demo` script carrying those
-values, or accepting that hand-evaluation needs one documented flag. Neither is
-chosen yet.
-
 ### L16 — A resynced feed can be mostly empty threads {#l16}
 
 **Where** — `ThreadRunner.summaries` returns every thread the session has ever
@@ -421,6 +375,58 @@ per thread, so it is a one-liner once someone has one. See
    disappears, at the cost of a store. That is [L7](#l7).
 
 None is built; the honest wording and the quiet rendering are.
+
+### L17 — Stop cannot be clicked by hand in scripted mode {#l17}
+
+**Where** — `SCRIPTED_CHUNK_DELAY_MS` (default 25) in
+[`scripted-llm.ts`](../packages/agents/src/scripted-llm.ts) and
+`TOOL_LATENCY_MS` (default 150) in
+[`tools.ts`](../packages/agents/src/tools.ts).
+
+The Stop control renders only while a thread's status is non-terminal
+([`ThreadCard.tsx`](../apps/web/src/feed/ThreadCard.tsx), `const active =
+!isTerminal(thread.status)`), which is correct: offering to cancel something
+already finished is worse than not offering it.
+
+At the default pacing that window is **465 ms** for the order-tracking prompt
+and **657 ms** for the research pipeline, measured off the wire. A person cannot
+notice a control appear, decide to use it and reach it in that time. The feature
+is fully built, wired and tested, and reads as missing to anyone evaluating the
+app by hand.
+
+**Why it is not a defect in the feature.** With `MODEL_MODE=gemini` a thread
+runs for seconds and Stop is comfortably reachable. The 465 ms is an artefact of
+the scripted model being fast on purpose — the same property that makes the test
+suite deterministic.
+
+**Why it is still a real problem.** The first thing anyone does with this repo
+is `pnpm dev`, send a prompt, and look at what happens. Cancellation is one of
+the more interesting things it does, and at the default it is invisible. A
+capability nobody can observe is indistinguishable from one that does not exist.
+
+The same root cause already bit the browser suite: the cancellation specs could
+not reliably click Stop either, which is why `playwright.config.ts` pins
+`SCRIPTED_CHUNK_DELAY_MS: '60'` for its web servers. That fix was applied to the
+tests and not to the human.
+
+**Fixed, as a second way to run it rather than a new default.**
+
+```bash
+pnpm dev:demo    # SCRIPTED_CHUNK_DELAY_MS=200 TOOL_LATENCY_MS=400
+```
+
+The window becomes **2.0 s** for the router and **4.2 s** for the research
+pipeline, both verified by clicking Stop in a browser and watching the thread
+settle to `cancelled` with its messages cut mid-sentence.
+
+The shipped default is deliberately unchanged. Raising it would slow the first
+thing every reader sees in order to fix a problem that only appears when someone
+evaluates by hand, and CI would then be running different pacing from `pnpm dev`
+for no benefit. Two named ways to run it is the smaller lie: `dev` is what the
+tests exercise, `dev:demo` is what a person watches.
+
+Both knobs remain settable directly, and are documented in
+[`.env.example`](../.env.example) and the README config table.
 
 ---
 

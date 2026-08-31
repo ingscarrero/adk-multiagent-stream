@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env PORT=3001 tsx watch src/index.ts",
+    "dev:demo": "cross-env-shell PORT=3001 SCRIPTED_CHUNK_DELAY_MS=${SCRIPTED_CHUNK_DELAY_MS:-200} TOOL_LATENCY_MS=${TOOL_LATENCY_MS:-400} tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start:test": "cross-env PORT=3001 tsx src/index.ts",

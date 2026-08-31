@@ -618,8 +618,10 @@
 
     <p><strong>Stop is built, tested, and effectively invisible.</strong> The control renders only while a thread is non-terminal, which is right &mdash; offering to cancel something already finished is worse than not offering it. But at the default scripted pacing that window is <strong>465 ms</strong> for the router and <strong>657 ms</strong> for the research pipeline, measured off the wire. Nobody can notice a button appear, decide to use it and reach it in that time, so the feature reads as missing to anyone evaluating the app by hand.</p>
     <p>With <code>MODEL_MODE=gemini</code> a thread runs for seconds and Stop is comfortably reachable, so this is an artefact of the scripted model being fast on purpose &mdash; the same property that makes the suite deterministic. It is still a real problem, because the first thing anyone does is <code>pnpm dev</code> and send a prompt, and <strong>a capability nobody can observe is indistinguishable from one that does not exist</strong>. Raising the pacing makes it plainly visible:</p>
-    <pre><code>SCRIPTED_CHUNK_DELAY_MS=200 TOOL_LATENCY_MS=400 pnpm dev
+    <pre><code>pnpm dev:demo
+<span class="cmt">// SCRIPTED_CHUNK_DELAY_MS=200 TOOL_LATENCY_MS=400</span>
 <span class="cmt">// the window becomes 2.0s (router) and 4.2s (research)</span></code></pre>
+    <p>Shipped as a second way to run it rather than a new default: <code>dev</code> is what the tests exercise, <code>dev:demo</code> is what a person watches. Changing the default would slow the first thing every reader sees to fix a problem that only appears under hand-evaluation, and would leave CI on different pacing from <code>pnpm dev</code> for no benefit.</p>
     <p>The same root cause already bit the browser suite &mdash; the cancellation specs could not reliably click Stop either, which is why <code>playwright.config.ts</code> pins <code>SCRIPTED_CHUNK_DELAY_MS: '60'</code>. That fix went to the tests and not to the human. Recorded as <a href="../LIMITATIONS.md">L17</a>.</p>
   </section>
 
@@ -654,7 +656,7 @@
           <tr><td>Browser tests</td><td class="mono">63</td><td>Chromium 34, Firefox 25, recovery 4</td></tr>
           <tr><td>Eval cases</td><td class="mono">6</td><td>Run as a CLI and inside <code>pnpm test</code>, so they gate</td></tr>
           <tr><td>Status transitions asserted</td><td class="mono">64</td><td>Every <code>(from, to)</code> pair, against an independently written table</td></tr>
-          <tr><td>Recorded limitations</td><td class="mono">16</td><td>Two fixed and kept struck through, because the reasoning outlives the list</td></tr>
+          <tr><td>Recorded limitations</td><td class="mono">17</td><td>Two fixed and kept struck through, because the reasoning outlives the list</td></tr>
           <tr><td>External services required</td><td class="mono">0</td><td><code>pnpm install &amp;&amp; pnpm dev</code>. No key, no container</td></tr>
         </tbody>
       </table>

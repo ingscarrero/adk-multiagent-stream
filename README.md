@@ -31,7 +31,9 @@ Send a prompt, then send another before the first finishes. Both stream.
   complete | error | cancelled`, with a guarantee that no thread is ever left
   in a non-terminal state.
 - **Tool calls rendered inline**, arguments and results expandable.
-- **Stop** any thread mid-stream; the others are unaffected.
+- **Stop** any thread mid-stream; the others are unaffected. (Use `pnpm dev:demo`
+  to see this — at the default pacing a scripted thread finishes in ~0.5s and the
+  control is gone before you can click it: [L17](docs/LIMITATIONS.md#l17).)
 - **Reload and it comes back** — the server replays what you missed.
 
 ## Scripts
@@ -39,6 +41,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
+| `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
 | `pnpm test` | 217 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
 | `pnpm test:e2e` | 63 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
@@ -223,8 +226,9 @@ Everything is optional. See [`.env.example`](.env.example).
 | `GEMINI_MODEL` | `gemini-2.5-flash` | |
 | `PORT` | `3001` | Pinned to 3001 by `pnpm dev`, so an inherited `PORT` can't move the API onto the web app's port |
 | `SSE_HEARTBEAT_MS` | `15000` | Keeps idle proxies from closing the stream |
-| `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. **Raise to ~200 to demo by hand** — at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
-| `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only |
+| `SSE_RETRY_MS` | `1000` | The `retry:` value in the priming frame — the browser's reconnect backoff, honoured by `EventSource` with no client code |
+| `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. `pnpm dev:demo` sets this to `200`; at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
+| `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only. `pnpm dev:demo` sets this to `400` |
 | `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
 | `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` | `memory` / `keyword` / `trusted-header` / `memory` | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 
