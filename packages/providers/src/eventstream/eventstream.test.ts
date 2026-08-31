@@ -144,6 +144,38 @@ function streamContract(name: string, make: (retention: number) => EventStream) 
       expect(sub.replay).toHaveLength(1);
       await sub.close();
     });
+
+    it('drop releases a session, and only that session', async () => {
+      const stream = make(100);
+      await stream.append('gone', event(1));
+      await stream.append('kept', event(1));
+
+      await stream.drop('gone');
+
+      const gone = await stream.open('gone', null, () => {});
+      const kept = await stream.open('kept', null, () => {});
+      expect(gone.replay).toEqual([]);
+      expect(kept.replay).toHaveLength(1);
+      await gone.close();
+      await kept.close();
+    });
+
+    it('drop resets the offset counter, so a reused session id starts clean', async () => {
+      const stream = make(100);
+      await stream.append('s', event(1));
+      await stream.append('s', event(2));
+      await stream.drop('s');
+
+      // Offsets restarting at 1 is what makes the overrun check correct for a
+      // session id that comes back: `oldestOffset` would otherwise sit above a
+      // fresh client's position forever and resync on every connect.
+      expect((await stream.append('s', event(1))).offset).toBe(1);
+    });
+
+    it('drop is a no-op for a session that was never written to', async () => {
+      const stream = make(100);
+      await expect(stream.drop('never-existed')).resolves.toBeUndefined();
+    });
   });
 }
 

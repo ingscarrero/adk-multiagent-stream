@@ -44,6 +44,9 @@ export function createApp(deps: AppDeps = {}): FeedApp {
   const hubs = new HubRegistry(providers.eventStream, {
     heartbeatMs: config.heartbeatMs,
     reconnectDelayMs: config.reconnectDelayMs,
+    maxBufferedBytes: config.maxBufferedBytes,
+    idleTtlMs: config.idleTtlMs,
+    sweepIntervalMs: config.sweepIntervalMs,
   });
   const threads = new ThreadRunner({
     ...deps.runnerOptions,

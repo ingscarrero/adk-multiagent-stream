@@ -28,13 +28,13 @@ on the critical path of CI.
 | Layer | Runner | Count | What it proves |
 |---|---|---|---|
 | Protocol, reducer & components | Vitest (node/jsdom) | 95 | Ordering rules, status machine, wire schemas, the stream hook |
-| Server | Vitest (node) | 38 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation |
-| Providers | Vitest (node) | 36 | Config validation, plus contract suites for the knowledge and event-stream ports |
+| Server | Vitest (node) | 49 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation, and the two memory bounds |
+| Providers | Vitest (node) | 39 | Config validation, plus contract suites for the knowledge and event-stream ports |
 | Evals | Vitest (node) | 25 | Retrieval metrics and the agent regression gate |
 | ADK integration | Vitest (node) | 23 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
 | Browser | Playwright | 63 | The whole stack, in two engines plus a small-buffer recovery project |
 
-217 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
+231 in `pnpm test`, 63 in `pnpm test:e2e`, and 6 eval cases that run both as a
 CLI and inside the unit suite.
 
 ### Contract tests

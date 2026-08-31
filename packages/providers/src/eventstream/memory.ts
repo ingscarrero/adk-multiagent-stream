@@ -88,6 +88,14 @@ export function memoryEventStream(options: MemoryEventStreamOptions): EventStrea
       return Promise.resolve(subscription);
     },
 
+    drop(sessionId: string) {
+      // No listener check: the caller guarantees the session has no open
+      // subscriptions, and a session that was never written to is absent
+      // anyway, so `delete` is already the no-op the port asks for.
+      sessions.delete(sessionId);
+      return Promise.resolve();
+    },
+
     close() {
       sessions.clear();
       return Promise.resolve();

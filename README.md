@@ -43,7 +43,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 217 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test` | 231 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
 | `pnpm test:e2e` | 63 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
@@ -227,6 +227,9 @@ Everything is optional. See [`.env.example`](.env.example).
 | `PORT` | `3001` | Pinned to 3001 by `pnpm dev`, so an inherited `PORT` can't move the API onto the web app's port |
 | `SSE_HEARTBEAT_MS` | `15000` | Keeps idle proxies from closing the stream |
 | `SSE_RETRY_MS` | `1000` | The `retry:` value in the priming frame — the browser's reconnect backoff, honoured by `EventSource` with no client code |
+| `SSE_MAX_BUFFERED_BYTES` | `1048576` | Bytes queued for one subscriber before it is disconnected. Bounds what a stalled consumer can cost ([L2](docs/LIMITATIONS.md#l2)) |
+| `SESSION_IDLE_TTL_MS` | `900000` | How long an unwatched session may sit before its hub and retained events are released ([L3](docs/LIMITATIONS.md#l3)) |
+| `SESSION_SWEEP_INTERVAL_MS` | `60000` | How often to run that sweep |
 | `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. `pnpm dev:demo` sets this to `200`; at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
 | `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only. `pnpm dev:demo` sets this to `400` |
 | `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
@@ -237,10 +240,6 @@ Everything is optional. See [`.env.example`](.env.example).
 Every one of these is recorded with its cause, blast radius, and fix in
 **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)**. The headlines:
 
-- **No per-subscriber backpressure** — a slow consumer is buffered in server
-  memory without bound ([L2](docs/LIMITATIONS.md#l2)).
-- **Session hubs are never evicted** — bounded per session, unbounded in
-  sessions ([L3](docs/LIMITATIONS.md#l3)).
 - **No message store** — the event log is the only place messages exist, so a
   transcript expires with the retention window rather than being kept
   ([L7](docs/LIMITATIONS.md#l7), [L16](docs/LIMITATIONS.md#l16)). This is the

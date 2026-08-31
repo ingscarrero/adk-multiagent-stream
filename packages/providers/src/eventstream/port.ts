@@ -65,5 +65,24 @@ export interface EventStream {
     afterOffset: number | null,
     onEntry: (entry: StreamEntry) => void,
   ): Promise<StreamSubscription>;
+  /**
+   * Releases everything retained for one session.
+   *
+   * Retention bounds how much is kept *per session*; nothing bounds the number
+   * of sessions, and every browser tab that ever connected is one. Without this
+   * the log grows monotonically with unique visitors, which is the wrong half
+   * to have bounded -- see L3 in docs/LIMITATIONS.md.
+   *
+   * The caller guarantees no subscription is open for the session, so an
+   * adapter may assume it has no listeners to notify. Dropping an unknown
+   * session is a no-op rather than an error: the sweeper that calls this races
+   * with sessions that were never written to.
+   *
+   * Redis is `DEL`. Kafka has no per-key delete and would implement this as a
+   * no-op, letting topic retention do the work -- which is why this returns
+   * nothing and promises only that resources are released where that is
+   * possible.
+   */
+  drop(sessionId: string): Promise<void>;
   close(): Promise<void>;
 }
