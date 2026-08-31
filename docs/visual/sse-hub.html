@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Wire, Many Threads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>One Wire, Many Threads</h1>
+    <p class="standfirst">A single connection carrying every thread, the two counters that keep them straight, and the one byte that makes the handshake complete.</p>
+    <span class="filepath">apps/server/src/sse.ts</span>
+    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+  </header>
+
+
+  <section>
+    <h2>One connection, every thread</h2>
+    <p class="lede">A browser session opens exactly one SSE connection, and every thread's events travel down it. Not one stream per thread &mdash; browsers allow six concurrent HTTP/1.1 connections per origin, so per-thread streams break at the seventh concurrent thread, and only under concurrency, which is the condition a demo never hits and production always does.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 250" role="img" aria-label="Three threads publish into one session hub, which writes a single interleaved SSE stream to the browser. Each frame carries a per-thread sequence number and a per-session offset.">
+          <defs><marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="18" width="150" height="40" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="43" font-size="11.5" class="s-mono">thread A</text>
+          <rect x="0" y="72" width="150" height="40" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="97" font-size="11.5" class="s-mono">thread B</text>
+          <rect x="0" y="126" width="150" height="40" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="151" font-size="11.5" class="s-mono">thread C</text>
+
+          <line x1="153" y1="38" x2="216" y2="80" class="s-line" stroke-width="1.5" marker-end="url(#s1)"/>
+          <line x1="153" y1="92" x2="216" y2="92" class="s-line" stroke-width="1.5" marker-end="url(#s1)"/>
+          <line x1="153" y1="146" x2="216" y2="104" class="s-line" stroke-width="1.5" marker-end="url(#s1)"/>
+
+          <rect x="220" y="52" width="180" height="80" rx="8" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="238" y="78" font-size="12.5" class="s-accent-text">SessionHub</text>
+          <text x="238" y="100" font-size="11" class="s-mono">offset++</text>
+          <text x="238" y="118" font-size="11" class="s-mono">buffer (500)</text>
+
+          <line x1="403" y1="92" x2="446" y2="92" class="s-line" stroke-width="1.5" marker-end="url(#s1)"/>
+
+          <rect x="450" y="34" width="490" height="116" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="468" y="58" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.09em">ONE SSE STREAM</text>
+          <text x="468" y="82" font-size="11.5" class="s-mono">id: 41  A seq 7</text>
+          <text x="468" y="102" font-size="11.5" class="s-mono">id: 42  B seq 3</text>
+          <text x="468" y="122" font-size="11.5" class="s-mono">id: 43  A seq 8</text>
+          <text x="700" y="82" font-size="10.5" class="s-sub">per-session offset</text>
+          <text x="700" y="102" font-size="10.5" class="s-sub">per-thread seq</text>
+          <text x="700" y="122" font-size="10.5" class="s-sub">interleaved by design</text>
+
+          <text x="450" y="188" font-size="11" class="s-sub">Threads A and B both count seq from 1. That is correct: ordering is only ever</text>
+          <text x="450" y="206" font-size="11" class="s-sub">defined within a thread, and the offset column is what resume uses.</text>
+        </svg>
+      </div>
+      <figcaption>The hub is the single writer. Frames interleave across threads on the wire, which is exactly why ordering has to be expressed per thread rather than by arrival.</figcaption>
+    </figure>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th class="mono">seq</th><th class="mono">offset</th></tr></thead>
+        <tbody>
+          <tr><td>scope</td><td>per <strong>thread</strong></td><td>per <strong>session</strong></td></tr>
+          <tr><td>purpose</td><td>ordering semantics</td><td>transport resume</td></tr>
+          <tr><td>assigned by</td><td class="mono">ThreadRunner.emit</td><td class="mono">SessionHub.publish</td></tr>
+          <tr><td>consumed by</td><td>the client reducer</td><td class="mono">Last-Event-ID</td></tr>
+          <tr><td>starts at</td><td>1, for every thread</td><td>1, once per session</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>One counter cannot do both jobs. A global counter cannot express per-thread order once threads interleave, and a per-thread counter cannot drive <code>Last-Event-ID</code> on a shared connection.</p>
+  </section>
+
+  <section>
+    <h2>The handshake, and the byte that makes it work</h2>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 250" role="img" aria-label="Subscribe writes headers, flushes them, writes a priming retry and comment frame, replays the buffer, then registers the subscriber and starts the heartbeat.">
+          <defs><marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="0" y="40" width="160" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="64" font-size="12" class="s-title">writeHead</text>
+          <text x="16" y="84" font-size="10.5" class="s-mono">no-transform</text>
+          <text x="16" y="98" font-size="10.5" class="s-mono">X-Accel-Buffering</text>
+          <line x1="163" y1="72" x2="196" y2="72" class="s-line" stroke-width="1.5" marker-end="url(#s2)"/>
+
+          <rect x="200" y="40" width="150" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="216" y="64" font-size="12" class="s-title">flushHeaders</text>
+          <text x="216" y="86" font-size="10.5" class="s-sub">this response only</text>
+          <line x1="353" y1="72" x2="386" y2="72" class="s-line" stroke-width="1.5" marker-end="url(#s2)"/>
+
+          <rect x="390" y="34" width="200" height="76" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="406" y="58" font-size="12" class="s-ok-text">priming frame</text>
+          <text x="406" y="80" font-size="11" class="s-mono">retry: 1000</text>
+          <text x="406" y="98" font-size="11" class="s-mono">: connected</text>
+          <line x1="593" y1="72" x2="626" y2="72" class="s-line" stroke-width="1.5" marker-end="url(#s2)"/>
+
+          <rect x="630" y="40" width="130" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="646" y="64" font-size="12" class="s-title">replayTo</text>
+          <text x="646" y="86" font-size="10.5" class="s-sub">catch-up</text>
+          <line x1="763" y1="72" x2="796" y2="72" class="s-line" stroke-width="1.5" marker-end="url(#s2)"/>
+
+          <rect x="800" y="40" width="100" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="816" y="64" font-size="12" class="s-title">subscribe</text>
+          <text x="816" y="86" font-size="10.5" class="s-sub">+ heartbeat</text>
+
+          <rect x="390" y="140" width="510" height="86" rx="8" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="408" y="164" font-size="11.5" class="s-warn-text">Without this frame the browser never fires onopen</text>
+          <text x="408" y="186" font-size="11" class="s-sub">flushHeaders flushes YOUR response. A proxy, nginx or a load balancer has</text>
+          <text x="408" y="202" font-size="11" class="s-sub">its own outbound response, and Node holds those headers until a body byte</text>
+          <text x="408" y="218" font-size="11" class="s-sub">is written. On an idle feed the next byte is a heartbeat 15 seconds later.</text>
+          <line x1="490" y1="112" x2="490" y2="136" class="s-dash" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <figcaption>The <code>retry:</code> field sets the browser's reconnect backoff at the same time, which is otherwise a browser-specific default with no way to influence it. Both halves are written in a single <code>res.write</code>, so the frame cannot be split across chunks.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Replay, and the two ways to be missing a prefix</h2>
+    <p class="lede">The buffer holds the last 500 events per session. A client that reconnects inside that window is caught up silently. A client outside it needs to be told, and there are two quite different ways to be outside it.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 320" role="img" aria-label="replayTo branches on whether the client is resuming. A resuming client missing a prefix, or a fresh client connecting to a session whose start has rolled out, both receive a resync frame before the replay.">
+          <defs><marker id="s3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="330" y="0" width="240" height="34" rx="17" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="450" y="22" text-anchor="middle" font-size="11.5" class="s-mono" style="fill: var(--accent)">replayTo(lastEventId)</text>
+          <line x1="450" y1="34" x2="450" y2="54" class="s-line" stroke-width="1.5" marker-end="url(#s3)"/>
+
+          <rect x="300" y="56" width="300" height="46" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="450" y="84" text-anchor="middle" font-size="11.5" class="s-mono">resuming = finite(since) &amp;&amp; since &gt; 0</text>
+
+          <line x1="380" y1="102" x2="200" y2="140" class="s-line" stroke-width="1.5" marker-end="url(#s3)"/>
+          <line x1="520" y1="102" x2="700" y2="140" class="s-line" stroke-width="1.5" marker-end="url(#s3)"/>
+          <text x="250" y="122" font-size="10.5" class="s-sub">resuming</text>
+          <text x="620" y="122" font-size="10.5" class="s-sub">fresh</text>
+
+          <rect x="20" y="142" width="360" height="76" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="38" y="166" font-size="12" class="s-title">has a resume point</text>
+          <text x="38" y="188" font-size="11" class="s-mono">since + 1 &lt; oldestHeld ?</text>
+          <text x="38" y="208" font-size="10.5" class="s-sub">the offset it asked for is gone</text>
+
+          <rect x="520" y="142" width="360" height="76" rx="7" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="538" y="166" font-size="12" class="s-warn-text">has no resume point</text>
+          <text x="538" y="188" font-size="11" class="s-mono">oldestHeld &gt; 1 ?</text>
+          <text x="538" y="208" font-size="10.5" class="s-sub">a reload; it simply starts mid-stream</text>
+
+          <line x1="200" y1="218" x2="410" y2="252" class="s-line" stroke-width="1.5" marker-end="url(#s3)"/>
+          <line x1="700" y1="218" x2="490" y2="252" class="s-line" stroke-width="1.5" marker-end="url(#s3)"/>
+
+          <rect x="290" y="254" width="320" height="56" rx="7" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="450" y="278" text-anchor="middle" font-size="12" class="s-bad-text">event: resync</text>
+          <text x="450" y="298" text-anchor="middle" font-size="11" class="s-mono">data: {"from": oldestHeld}</text>
+        </svg>
+      </div>
+      <figcaption>Both branches mean the same thing to the client &mdash; "you are missing the beginning" &mdash; so both send the same notice. The right-hand branch is the one that is easy to forget: that client has no stale offset to be wrong about.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="note-label">How the second branch was found</span>
+      <p>The first version of the fix handled only the left branch. Tests passed at three layers &mdash; server, reducer, and hook &mdash; because all three exercised a <em>resuming</em> client. Driving a real browser against a four-event buffer showed a page reload still losing the thread entirely.</p>
+      <p>Layered tests prove each layer. They do not prove you enumerated the cases.</p>
+    </div>
+
+    <h3>The exchange, frame by frame</h3>
+    <p>A browser reloading into a session whose buffer has already rolled. This is what actually crosses the wire:</p>
+
+    <pre><code><span class="cmt">GET /api/stream?sessionId=S            (no Last-Event-ID -- a fresh page)</span>
+
+retry: 1000
+: connected
+
+event: resync
+data: {"from":156}
+
+id: 156
+event: feed
+data: {"type":"message.delta","threadId":"thr-a","seq":19, ...}
+<span class="cmt">... the rest of the buffer, starting mid-thread ...</span></code></pre>
+
+    <p>The client stops there, fetches the snapshot, and comes back &mdash; <strong>resuming from the offset the notice named</strong>:</p>
+
+    <pre><code><span class="cmt">GET /api/threads?sessionId=S          -&gt; { threads: [ { id, prompt, status, lastSeq } ] }</span>
+
+<span class="cmt">GET /api/stream?sessionId=S           Last-Event-ID: 155</span>
+
+retry: 1000
+: connected
+
+id: 156
+event: feed
+data: {"type":"message.delta", ...}
+<span class="cmt">... the same replay, and no resync this time ...</span></code></pre>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 300" role="img" aria-label="Two round trips. A fresh connect receives a resync notice naming offset 156; the client fetches the snapshot and reconnects with Last-Event-ID 155, receiving the same replay with no further notice. Reconnecting with no resume point instead receives another notice, looping forever.">
+          <defs><marker id="s4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <text x="60" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">CLIENT</text>
+          <text x="742" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">SERVER</text>
+          <line x1="90" y1="26" x2="90" y2="284" class="s-dash" stroke-width="1.5"/>
+          <line x1="790" y1="26" x2="790" y2="284" class="s-dash" stroke-width="1.5"/>
+
+          <line x1="90" y1="56" x2="784" y2="56" class="s-line" stroke-width="1.5" marker-end="url(#s4)"/>
+          <text x="110" y="50" font-size="11" class="s-mono">GET /api/stream   (no resume point)</text>
+
+          <line x1="790" y1="92" x2="96" y2="92" class="s-line" stroke-width="1.5" marker-end="url(#s4)"/>
+          <text x="110" y="86" font-size="11" class="s-mono" style="fill: var(--bad)">event: resync   {"from":156}</text>
+
+          <line x1="90" y1="130" x2="784" y2="130" class="s-line" stroke-width="1.5" marker-end="url(#s4)"/>
+          <text x="110" y="124" font-size="11" class="s-mono">GET /api/threads  (snapshot, carries lastSeq)</text>
+
+          <line x1="90" y1="168" x2="784" y2="168" class="s-line" stroke-width="1.5" marker-end="url(#s4)"/>
+          <text x="110" y="162" font-size="11" class="s-mono" style="fill: var(--ok)">GET /api/stream   Last-Event-ID: 155</text>
+
+          <line x1="790" y1="204" x2="96" y2="204" class="s-line" stroke-width="1.5" marker-end="url(#s4)"/>
+          <text x="110" y="198" font-size="11" class="s-mono" style="fill: var(--ok)">replay from 156, no further notice</text>
+
+          <rect x="90" y="226" width="700" height="58" rx="7" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="108" y="248" font-size="11.5" class="s-warn-text">Coming back with no resume point instead loops forever</text>
+          <text x="108" y="270" font-size="11" class="s-sub">oldestHeld &gt; 1 is still true, so the server sends another notice, and another</text>
+        </svg>
+      </div>
+      <figcaption>Two round trips, then steady state. <code>from - 1</code> is the resume point that both replays the whole buffer and satisfies the overrun test &mdash; <code>since + 1 &lt; oldestHeld</code> becomes <code>156 &lt; 156</code>, which is false.</figcaption>
+    </figure>
+
+    <div class="note warn">
+      <span class="note-label">The loop this replaced</span>
+      <p>The first version of the client reconnected with no <code>Last-Event-ID</code> at all &mdash; "replay everything you have", which reads as the obvious thing to do. But the overrun test for a client with no offset is <code>oldestHeld &gt; 1</code>, still true the instant it returns, so the server sent another notice immediately.</p>
+      <p>The stream never stayed up. The visible symptom had nothing to do with reconnection: <strong>new threads arrived empty and marked truncated</strong>, because live events were being torn down mid-flight. The <code>from</code> field had been in the payload the whole time, unused.</p>
+    </div>
+
+    <h3>What comes back, and what cannot</h3>
+    <p>The snapshot carries each thread's identity, status and <code>lastSeq</code> &mdash; never its transcript. Events live only in this buffer, so anything rolled out is genuinely gone. A rebuilt thread is marked <code>historyTruncated</code> and says so: <em>"Earlier messages were lost"</em> when some survived, <em>"Messages for this thread are no longer available"</em> when none did.</p>
+  </section>
+
+  <section>
+    <h2>Framing, heartbeat, teardown</h2>
+
+    <div class="card ok">
+      <div class="card-head"><span class="card-num">01</span><span class="card-name">Why the frame format is safe by construction</span></div>
+      <pre><code>id: 42
+event: feed
+data: {"type":"message.delta", ...}
+</code></pre>
+      <p>SSE framing is whitespace-sensitive: a literal newline inside <code>data:</code> would split the frame. <code>JSON.stringify</code> cannot emit one &mdash; it escapes newlines as <code>\n</code> &mdash; so no payload can break the envelope. Worth knowing as a property, not a hope.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-num">02</span><span class="card-name">The heartbeat is a comment</span></div>
+      <p>A line beginning <code>:</code> is invisible to <code>EventSource</code> consumers but keeps the socket warm. Idle proxies close quiet connections, and a multiplexed feed can legitimately be idle for minutes. The interval is <code>unref</code>'d so it never holds the process open, and it only runs while someone is listening.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-num">03</span><span class="card-name">Buffering happens with zero subscribers</span></div>
+      <p><code>publish</code> writes to the buffer whether or not anyone is connected. A thread started before the stream opens &mdash; or while the browser is reconnecting &mdash; must not lose its events, and this is what makes the late-subscriber case work at all.</p>
+    </div>
+
+    <div class="card bad">
+      <div class="card-head"><span class="card-num">04</span><span class="card-name">Two things this file does not do</span></div>
+      <p><strong>Backpressure.</strong> <code>subscriber.write(frame)</code> discards its return value. Node returns <code>false</code> when the socket buffer is full and then queues in memory without bound, so one stalled consumer grows the server for as long as it stays connected.</p>
+      <p><strong>Eviction.</strong> <code>HubRegistry</code> creates hubs on demand and only removes them at shutdown. The buffer is bounded per session; the number of sessions is not, which is the wrong half to have bounded.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>Two threads are streaming. Thread A is at <code>seq</code> 9 and thread B at <code>seq</code> 2. What is the next <code>id:</code> on the wire?</li>
+      <li>A client reconnects with <code>Last-Event-ID: 60</code> and the buffer holds offsets 45&ndash;544. What does it receive?</li>
+      <li>Same buffer, but the client sends no <code>Last-Event-ID</code>. What does it receive, and why is that different from the case above?</li>
+      <li>The feed is idle for two minutes with one subscriber. How many bytes cross the wire, and what are they?</li>
+    </ol>
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> Unknowable from the seqs &mdash; <code>offset</code> is per session and independent of both. That independence is the point. <strong>2.</strong> Offsets 61 upward, no <code>resync</code>: 60 is inside the window. <strong>3.</strong> The whole buffer <em>and</em> a <code>resync</code>, because <code>oldestHeld</code> is 45 rather than 1, so the session's start is already gone. <strong>4.</strong> Eight heartbeat comments at the default 15s interval &mdash; invisible to the client's handlers, and the reason the connection survives a proxy.</p>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

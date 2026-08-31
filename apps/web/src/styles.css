@@ -1,0 +1,282 @@
+/**
+ * Styles.
+ *
+ * One stylesheet, plain CSS, custom properties for theming. No CSS framework:
+ * the interesting part of this repo is the stream, and a build-time styling
+ * layer would be one more thing for a reviewer to read past.
+ *
+ * Light and dark are both defined; `prefers-reduced-motion` disables the
+ * streaming caret and status pulse, which are the only animations here.
+ */
+
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f2f2f4;
+  --border: #e2e2e6;
+  --text: #16161a;
+  --text-muted: #6b6b76;
+  --accent: #2d5bd7;
+  --accent-contrast: #ffffff;
+  /* Semantic colours are AA-checked against --surface-2 (#f2f2f4), the lowest
+     contrast background they appear on. The obvious brighter greens and ambers
+     land at 4.2-4.4:1 and fail; these are the darkened versions that pass.
+     `e2e/specs/a11y.spec.ts` enforces this. */
+  --success: #0f6b3f;
+  --warning: #8a5200;
+  --danger: #b32d24;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f11;
+    --surface: #17171b;
+    --surface-2: #1e1e24;
+    --border: #2a2a32;
+    --text: #ececf1;
+    --text-muted: #9a9aa8;
+    --accent: #7c9cff;
+    --accent-contrast: #0f0f11;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Visually hidden but available to screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100dvh;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.app__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.app__title { margin: 0; font-size: 19px; letter-spacing: -0.01em; }
+.app__subtitle { margin: 2px 0 0; color: var(--text-muted); font-size: 13px; }
+.app__meta { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.app__count { color: var(--text-muted); }
+
+.connection {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.connection--open { color: var(--success); }
+.connection--reconnecting { color: var(--warning); }
+
+/* Counter readout, revealed with `?debug`. Deliberately plain: it is an
+   instrument, not part of the product surface. */
+.app__debug {
+  display: inline-flex;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.app__debug--alert { color: var(--danger); font-weight: 600; }
+
+.app__main { position: relative; min-height: 0; }
+
+.feed {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-gutter: stable;
+}
+.feed__empty { color: var(--text-muted); text-align: center; margin: 48px 0; }
+
+.thread {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.thread[data-status="error"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+
+.thread__header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.thread__promptText { margin: 0; font-weight: 600; }
+.thread__agent { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+.thread__controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.thread__body { display: flex; flex-direction: column; gap: 8px; }
+.thread__placeholder { margin: 0; color: var(--text-muted); font-size: 13px; }
+.thread__error { margin: 0; color: var(--danger); font-size: 13px; }
+.thread__truncated {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--warning);
+  background: var(--surface-2);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+/* Nothing recoverable: this is history, not something to act on, so it loses
+   the warning bar and sits quietly. A feed rebuilt after a buffer overrun can
+   be almost entirely made of these. */
+.thread__truncated--total {
+  padding: 0;
+  border-left: none;
+  background: none;
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.75;
+}
+/* No opacity here: a translucent danger colour blends toward the background and
+   drops below the AA threshold, which axe reports as a contrast failure on a
+   colour that looks fine in the stylesheet. */
+.thread__errorCode { margin-left: 6px; font-family: var(--mono); color: var(--text-muted); }
+
+.message { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.message__author {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); font-family: var(--mono); margin-bottom: 4px;
+}
+.message__text { white-space: pre-wrap; word-break: break-word; }
+
+.caret {
+  display: inline-block;
+  width: 7px; height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { to { visibility: hidden; } }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.chip--streaming, .chip--running { color: var(--accent); }
+.chip--awaiting_tool, .chip--awaiting_input { color: var(--warning); }
+.chip--complete { color: var(--success); }
+.chip--error { color: var(--danger); }
+.chip__pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.25; } }
+
+.tool { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.tool__summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: pointer; font-size: 13px;
+  list-style: none;
+}
+.tool__summary::-webkit-details-marker { display: none; }
+.tool__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.tool__dot--pending { background: var(--warning); animation: pulse 1.2s ease-in-out infinite; }
+.tool__name { font-family: var(--mono); }
+.tool__state { color: var(--text-muted); margin-left: auto; font-size: 12px; }
+.tool__body { padding: 0 10px 10px; }
+.tool__label {
+  margin: 6px 0 3px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-muted);
+}
+.tool__pre {
+  margin: 0; padding: 8px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12px;
+  overflow-x: auto;
+}
+
+.app__footer { padding: 12px 0 18px; border-top: 1px solid var(--border); }
+.app__error { margin: 0 0 8px; color: var(--danger); font-size: 13px; }
+
+.composer__row { display: flex; gap: 8px; align-items: stretch; }
+.composer__select, .composer__input {
+  font: inherit; color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+.composer__input { flex: 1; resize: none; min-height: 40px; max-height: 140px; }
+.composer__input:focus-visible, .composer__select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.composer__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.composer__suggestions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  list-style: none; margin: 8px 0 0; padding: 0;
+}
+.chipButton {
+  font: inherit; font-size: 12px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface); color: var(--text-muted);
+  border: 1px solid var(--border); cursor: pointer;
+}
+.chipButton:hover { color: var(--text); border-color: var(--accent); }
+
+.button {
+  font: inherit; font-size: 13px; font-weight: 500;
+  border-radius: 8px; padding: 8px 14px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); cursor: pointer;
+}
+.button:disabled { opacity: 0.45; cursor: not-allowed; }
+.button--primary { background: var(--accent); color: var(--accent-contrast); border-color: transparent; }
+.button--ghost { padding: 4px 10px; font-size: 12px; color: var(--text-muted); }
+.button--ghost:hover { color: var(--danger); border-color: var(--danger); }
+.button--jump {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+}
+.button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .caret, .chip__pulse, .tool__dot--pending { animation: none; }
+  .caret { visibility: visible; }
+  * { scroll-behavior: auto !important; }
+}

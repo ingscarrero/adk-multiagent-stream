@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start, Stream, Settle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>Start, Stream, Settle</h1>
+    <p class="standfirst">One prompt becomes a detached agent run &mdash; and the finally block that guarantees it always ends somewhere.</p>
+    <span class="filepath">apps/server/src/thread-runner.ts</span>
+    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+  </header>
+
+
+  <section>
+    <h2>Fire and forget, or nothing else works</h2>
+    <p class="lede"><code>POST /api/threads</code> returns <code>202</code> as soon as the thread exists. The agent run is a detached promise. That single decision is what makes concurrent threads possible at all &mdash; a create endpoint that waited for the model would serialise every thread at the HTTP layer, and the whole feed would be theatre.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 280" role="img" aria-label="With a blocking create endpoint two requests run one after the other; with a detached run both threads stream concurrently over the shared stream.">
+          <text x="0" y="16" font-size="10.5" class="s-bad-text s-mono" style="letter-spacing:0.08em">BLOCKING CREATE</text>
+          <rect x="0" y="26" width="900" height="86" rx="8" class="s-bad-fill" stroke-width="1.5"/>
+          <text x="18" y="50" font-size="11" class="s-mono">POST A</text>
+          <rect x="90" y="38" width="330" height="18" rx="4" class="s-box" stroke-width="1"/>
+          <text x="100" y="51" font-size="10" class="s-sub">agent A runs, response held open</text>
+          <text x="18" y="80" font-size="11" class="s-mono">POST B</text>
+          <rect x="424" y="68" width="330" height="18" rx="4" class="s-box" stroke-width="1"/>
+          <text x="434" y="81" font-size="10" class="s-sub">agent B waits its turn</text>
+          <text x="18" y="102" font-size="10.5" class="s-sub">two threads, one after the other &mdash; concurrency in the UI only</text>
+
+          <text x="0" y="152" font-size="10.5" class="s-ok-text s-mono" style="letter-spacing:0.08em">DETACHED RUN</text>
+          <rect x="0" y="162" width="900" height="106" rx="8" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="18" y="186" font-size="11" class="s-mono">POST A</text>
+          <rect x="90" y="174" width="46" height="18" rx="4" class="s-accent-fill" stroke-width="1"/>
+          <text x="100" y="187" font-size="10" style="fill: var(--accent)">202</text>
+          <rect x="144" y="174" width="330" height="18" rx="4" class="s-box" stroke-width="1"/>
+          <text x="154" y="187" font-size="10" class="s-sub">agent A streams on the SSE connection</text>
+
+          <text x="18" y="216" font-size="11" class="s-mono">POST B</text>
+          <rect x="90" y="204" width="46" height="18" rx="4" class="s-accent-fill" stroke-width="1"/>
+          <text x="100" y="217" font-size="10" style="fill: var(--accent)">202</text>
+          <rect x="144" y="204" width="330" height="18" rx="4" class="s-box" stroke-width="1"/>
+          <text x="154" y="217" font-size="10" class="s-sub">agent B streams at the same time</text>
+
+          <text x="18" y="246" font-size="10.5" class="s-sub">the response carries ids only; every result arrives on the stream</text>
+        </svg>
+      </div>
+      <figcaption><code>start()</code> registers the thread, publishes <code>thread.created</code> at <code>seq</code> 1, and returns. The run is tracked in an <code>inFlight</code> set purely so tests and shutdown can await quiescence &mdash; never so a request can.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The run, and the block that ends it</h2>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 820 400" role="img" aria-label="The run calls begin, then consumes the ADK stream publishing translated drafts, and whatever happens the finally block publishes finish with a terminal status.">
+          <defs><marker id="r1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <rect x="250" y="0" width="220" height="34" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="360" y="22" text-anchor="middle" font-size="11.5" class="s-mono" style="fill: var(--accent)">translator.begin()</text>
+          <line x1="360" y1="34" x2="360" y2="54" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
+
+          <rect x="200" y="56" width="320" height="96" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="218" y="80" font-size="12" class="s-title">for await (runner.runAsync)</text>
+          <text x="218" y="102" font-size="11" class="s-mono">publish(translate(event))</text>
+          <text x="218" y="122" font-size="10.5" class="s-sub">abortSignal threaded straight into ADK</text>
+          <text x="218" y="140" font-size="10.5" class="s-sub">maxLlmCalls: 20 as a loop backstop</text>
+
+          <line x1="200" y1="104" x2="120" y2="104" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
+          <text x="0" y="94" font-size="10.5" class="s-sub">each event is</text>
+          <text x="0" y="108" font-size="10.5" class="s-sub">stamped and</text>
+          <text x="0" y="122" font-size="10.5" class="s-sub">published</text>
+
+          <line x1="360" y1="152" x2="360" y2="174" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
+          <rect x="200" y="176" width="320" height="60" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="218" y="200" font-size="12" class="s-title">catch</text>
+          <text x="218" y="222" font-size="11" class="s-mono">aborted ? cancelled : fail(...)</text>
+
+          <line x1="360" y1="236" x2="360" y2="258" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
+          <rect x="180" y="260" width="360" height="76" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="198" y="284" font-size="12.5" class="s-ok-text">finally &mdash; always</text>
+          <text x="198" y="306" font-size="11" class="s-mono">publish(translator.finish(outcome))</text>
+          <text x="198" y="326" font-size="10.5" class="s-sub">flushes open messages, then the terminal status</text>
+
+          <rect x="580" y="260" width="240" height="76" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="598" y="284" font-size="11.5" class="s-ok-text">complete</text>
+          <text x="598" y="304" font-size="11.5" class="s-bad-text">error</text>
+          <text x="598" y="324" font-size="11.5" class="s-warn-text">cancelled</text>
+          <line x1="543" y1="298" x2="576" y2="298" class="s-line" stroke-width="1.5" marker-end="url(#r1)"/>
+        </svg>
+      </div>
+      <figcaption>The guarantee is structural, not conventional: whether the model errors, the client aborts, or ADK throws, the <code>finally</code> runs and the thread reaches a terminal status with no message left open.</figcaption>
+    </figure>
+
+    <p>Without it, a thrown ADK stream would leave a thread on <code>streaming</code> forever &mdash; a blinking caret on a run that ended, with nothing in the UI to say so and no way for the client to find out.</p>
+  </section>
+
+  <section>
+    <h2>Sequence numbers are assigned in exactly one place</h2>
+    <pre><code>private emit(hub, threadId, draft) {
+  const seq = (this.sequences.get(threadId) ?? 0) + 1;
+  this.sequences.set(threadId, seq);
+
+  <span class="cmt">// Validating on the way out means a protocol mistake fails in the</span>
+  <span class="cmt">// server's own tests rather than as a dropped frame in the browser.</span>
+  const event = parseFeedEvent({ ...draft, threadId, seq, ts: Date.now() });
+  hub.publish(event);
+  return event;
+}</code></pre>
+    <p>Every draft from the translator passes through here. One counter, one increment site, one place to get it wrong &mdash; which matters because a skipped <code>seq</code> is not cosmetic: the client buffers against a gap that never closes and the thread stalls permanently.</p>
+
+    <div class="note">
+      <span class="note-label">Why validate on the hot path</span>
+      <p>Every event, including every token delta, is parsed through zod. That is a real cost, taken deliberately: a malformed event fails loudly in the server's own test run instead of vanishing silently in a browser. If profiling ever justified it, validating in development only is the change &mdash; not removing it.</p>
+    </div>
+
+    <h3>The same counter reports itself</h3>
+    <p><code>summaries(sessionId)</code> serves <code>GET /api/threads</code>, and the <code>lastSeq</code> it reports comes from the very map <code>emit</code> increments. One counter assigns sequence numbers and one counter answers "where has this thread got to" &mdash; they cannot disagree, because they are the same thing.</p>
+    <pre><code>summaries(sessionId) {
+  return this.list(sessionId)
+    .sort((a, b) =&gt; a.createdAt - b.createdAt)
+    .map((thread) =&gt; ({
+      id: thread.id, prompt: thread.prompt, agent: thread.agent,
+      status: thread.status, createdAt: thread.createdAt,
+      <span class="cmt">// the same map emit() writes to</span>
+      lastSeq: this.sequences.get(thread.id) ?? 0,
+    }));
+}</code></pre>
+    <p>This is the foundation of the <code>resync</code> recovery path. When a client's resume point falls out of the SSE replay buffer the server sends a <code>resync</code> notice; the client fetches this snapshot and rebuilds the threads it is missing. It does <em>not</em> seek forward to <code>lastSeq</code> &mdash; the replay that follows usually contains the very events it would have skipped &mdash; so the value serves only as the hint that a rebuilt thread has history worth warning about. Identity and status are recoverable; the transcript is not, because events live only in that buffer. The wire-level exchange is on <a href="sse-hub.html">One Wire, Many Threads</a>, and what the client does with the snapshot is on <a href="reducer-gates.html">Four Gates and a Drain</a> (traces G and H).</p>
+    <p>Sorted by <code>createdAt</code> so a rebuilt feed comes back in the order it was originally rendered.</p>
+
+    <h3>Two state machines, stepped together</h3>
+    <p>The publish helper applies <code>assertTransition</code> to the thread record whenever the translator emits a status. The record and the translator therefore advance in lockstep, and any divergence between them throws immediately rather than producing a UI that slowly drifts from reality. That assertion has already earned its place once.</p>
+  </section>
+
+  <section>
+    <h2>Isolation: a fresh tree and a private session per thread</h2>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">01</span><span class="card-name">A new agent tree per thread</span></div>
+      <p>ADK agents hold a <code>parentAgent</code> back-reference, so a single instance shared across concurrent threads corrupts transfer routing. <code>createAgent</code> is called inside <code>run</code>, once per thread. Construction is cheap; correctness is not.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-num">02</span><span class="card-name">One ADK session per thread</span></div>
+      <p><code>getOrCreateSession({ userId: sessionId, sessionId: thread.id })</code>. Threads are independent conversations, so sharing a session would leak one thread's history into another's model context. The browser session is the <em>user</em>; the thread is the <em>conversation</em>.</p>
+      <p>This is also the groundwork for follow-up messages: history already accumulates in that session, so a second turn needs a route and a composer rather than a redesign.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-num">03</span><span class="card-name">Cancellation goes straight into ADK</span></div>
+      <p>An <code>AbortController</code> per thread, its signal passed to <code>runAsync</code>. <code>cancel()</code> is idempotent and a no-op on a finished thread, which is what makes the route's <code>202</code> / <code>409</code> / <code>404</code> distinction meaningful rather than decorative.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>A thread's ADK stream throws on its third event. What does the client see, and in what order?</li>
+      <li>Two threads start in the same millisecond. Can their events collide on <code>seq</code>? On <code>offset</code>?</li>
+      <li><code>cancel()</code> is called twice in quick succession. What does each call return, and what does the client observe?</li>
+      <li>Why does <code>start()</code> publish <code>thread.created</code> itself rather than letting the run emit it?</li>
+    </ol>
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> Everything published before the throw, then <code>thread.error</code>, then <code>thread.status: error</code> &mdash; reason before state &mdash; and any half-written message is closed by <code>finish</code>. <strong>2.</strong> Not on <code>seq</code>: it is keyed per thread. Not on <code>offset</code> either: the hub is a single writer in a single-threaded runtime. <strong>3.</strong> The first returns <code>true</code> (<code>202</code>), the second <code>false</code> (<code>409</code>) because the signal is already aborted; the client sees exactly one <code>cancelled</code> status. <strong>4.</strong> So the thread exists before any agent work happens: the UI renders it immediately, and <code>seq</code> 1 is guaranteed to be the creation event for every thread.</p>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

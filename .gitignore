@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+coverage/
+.tsbuildinfo
+*.tsbuildinfo
+
+# Local env — never commit real keys
+.env
+.env.local
+.env.*.local
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+.DS_Store
+
+# Personal interview prep — never part of the deliverable
+**/INTERVIEW-NOTES.md
+*-prep-notes.md
+
+# Local editor/agent tooling
+.claude/

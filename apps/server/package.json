@@ -1,0 +1,29 @@
+{
+  "name": "@feed/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env PORT=3001 tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start:test": "cross-env PORT=3001 tsx src/index.ts",
+    "dev:recovery": "cross-env-shell PORT=3002 SSE_REPLAY_BUFFER=${SSE_REPLAY_BUFFER:-40} tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@feed/agents": "workspace:*",
+    "@feed/protocol": "workspace:*",
+    "@google/adk": "2.0.0",
+    "cors": "2.8.6",
+    "express": "5.2.1",
+    "dotenv": "17.2.4"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "supertest": "7.2.0",
+    "@types/supertest": "6.0.3",
+    "tsx": "4.23.13",
+    "cross-env": "10.1.0"
+  }
+}

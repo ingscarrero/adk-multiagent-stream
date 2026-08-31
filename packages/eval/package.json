@@ -1,0 +1,21 @@
+{
+  "name": "@feed/eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "scripts": {
+    "eval": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@feed/agents": "workspace:*",
+    "@google/adk": "2.0.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "tsx": "4.23.13"
+  }
+}

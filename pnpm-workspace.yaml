@@ -1,0 +1,11 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+  - 'e2e'
+
+# Packages allowed to run install scripts. esbuild needs its postinstall to
+# fetch a platform binary, which tsx and Vite both depend on.
+onlyBuiltDependencies:
+  - esbuild
+  - '@google/genai'
+  - protobufjs

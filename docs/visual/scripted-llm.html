@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Model That Never Changes Its Mind</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6; --surface: #ffffff; --surface-2: #f5f7fa;
+    --ink: #12161f; --ink-2: #4a5464; --ink-3: #626c7d;
+    --rule: #d7dde6; --rule-strong: #b9c2ce;
+    --accent: #2f35c4; --accent-soft: #e6e7fb;
+    --ok: #0e6f56; --ok-soft: #dcefe8;
+    --warn: #96590a; --warn-soft: #f8ecd8;
+    --bad: #a82f28; --bad-soft: #f8e3e1;
+    --measure: 68ch; --wide: 980px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+      --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+      --rule: #2a323f; --rule-strong: #3d4757;
+      --accent: #949aff; --accent-soft: #23264a;
+      --ok: #4cc79c; --ok-soft: #14312a;
+      --warn: #e0a54a; --warn-soft: #33270f;
+      --bad: #f28880; --bad-soft: #38201e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1017; --surface: #151a23; --surface-2: #1b212c;
+    --ink: #e7eaf1; --ink-2: #aeb7c6; --ink-3: #808b9c;
+    --rule: #2a323f; --rule-strong: #3d4757;
+    --accent: #949aff; --accent-soft: #23264a;
+    --ok: #4cc79c; --ok-soft: #14312a;
+    --warn: #e0a54a; --warn-soft: #33270f;
+    --bad: #f28880; --bad-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 2px solid var(--ink); padding: 56px 0 26px; margin-bottom: 44px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+    letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.06rem; color: var(--ink-2); max-width: var(--measure); margin: 0; }
+  .filepath {
+    display: inline-block; margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+    color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 4px 9px;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-weight: 600; font-size: 1.62rem;
+    letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong); text-wrap: balance;
+  }
+  h3 { font-weight: 600; font-size: 1.06rem; margin: 34px 0 8px; }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.875em;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+  }
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.65;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 26px 22px 18px; overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 13.5px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-ok-fill { fill: var(--ok-soft); stroke: var(--ok); }
+  .s-ok-text { fill: var(--ok); font-weight: 600; }
+  .s-warn-fill { fill: var(--warn-soft); stroke: var(--warn); }
+  .s-warn-text { fill: var(--warn); font-weight: 600; }
+  .s-bad-fill { fill: var(--bad-soft); stroke: var(--bad); }
+  .s-bad-text { fill: var(--bad); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-rule { stroke: var(--rule); }
+  .s-dash { stroke: var(--rule-strong); fill: none; stroke-dasharray: 4 3; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong); border-radius: 8px;
+    padding: 20px 22px; margin: 20px 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  .card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .card-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .card-name { font-weight: 600; font-size: 1.02rem; }
+  .card p { margin-bottom: 0; }
+  .card p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .chip--ok { color: var(--ok); background: var(--ok-soft); }
+  .chip--warn { color: var(--warn); background: var(--warn-soft); }
+  .chip--bad { color: var(--bad); background: var(--bad-soft); }
+  .chip--accent { color: var(--accent); background: var(--accent-soft); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); margin: 20px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 600; background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .note.warn { border-left-color: var(--warn); }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+    font-weight: 600; display: block; margin-bottom: 6px;
+  }
+  .note.warn .note-label { color: var(--warn); }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong); padding-top: 20px;
+    color: var(--ink-3); font-size: 13.5px; max-width: var(--measure);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>A Model That Never Changes Its Mind</h1>
+    <p class="standfirst">The deterministic BaseLlm that makes streaming tests possible &mdash; and the three ADK behaviours it had to learn the hard way.</p>
+    <span class="filepath">packages/agents/src/scripted-llm.ts</span>
+    <p class="siblings">Also in this set: <a href="reducer-gates.html">Four Gates and a Drain</a> &middot; <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; </p>
+  </header>
+
+
+  <section>
+    <h2>Why the model is fake</h2>
+    <p class="lede">A streaming UI is mostly <em>timing</em>, and timing tests against a real LLM are flaky by construction: token counts vary, latency varies, the model may or may not call a tool. Every test in this repo &mdash; unit, integration, Playwright, and the agent evals &mdash; runs against this class instead. The result is a suite that needs no API key, no network, and produces byte-identical output on every run.</p>
+
+    <p>That one decision is what makes assertions like <em>"the concatenated deltas equal the final text"</em> or <em>"the second tool call is <code>checkShippingStatus</code>"</em> reasonable rather than hopeful. The real Gemini path stays wired up and is exercised by hand; it is simply never on the critical path of CI.</p>
+
+    <div class="note">
+      <span class="note-label">The fidelity that matters</span>
+      <p><code>ScriptedLlm</code> mirrors <code>GoogleLlm</code>'s streaming shape exactly &mdash; N partial responses carrying only the new chunk, then one final non-partial response carrying the whole text. Without that fidelity the adapter would be written against a fake that behaves differently from the real thing, and the tests would prove nothing about production.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stateless by construction</h2>
+    <p class="lede">One instance is shared across every concurrent thread, so it cannot hold a cursor. The turn index is recovered from the request itself.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 300" role="img" aria-label="The turn index is derived by counting Content entries in the request that carry a function response for a tool this branch can call; foreign responses such as a transfer are ignored.">
+          <text x="0" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">llmRequest.contents</text>
+
+          <rect x="0" y="26" width="470" height="34" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="48" font-size="11" class="s-mono">user  "where is my order?"</text>
+          <text x="500" y="48" font-size="10.5" class="s-sub">the real prompt</text>
+
+          <rect x="0" y="66" width="470" height="34" rx="6" class="s-warn-fill" stroke-width="1.5"/>
+          <text x="16" y="88" font-size="11" class="s-mono">user  "For context:" transfer_to_agent</text>
+          <text x="500" y="88" font-size="10.5" class="s-warn-text">skipped &mdash; not ours</text>
+
+          <rect x="0" y="106" width="470" height="34" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="128" font-size="11" class="s-mono">model CALL lookupOrder</text>
+
+          <rect x="0" y="146" width="470" height="34" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="168" font-size="11" class="s-mono">user  RESP lookupOrder</text>
+          <text x="500" y="168" font-size="10.5" class="s-ok-text">counts: round 1</text>
+
+          <rect x="0" y="186" width="470" height="34" rx="6" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="208" font-size="11" class="s-mono">model CALL checkShippingStatus</text>
+
+          <rect x="0" y="226" width="470" height="34" rx="6" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="16" y="248" font-size="11" class="s-mono">user  RESP checkShippingStatus</text>
+          <text x="500" y="248" font-size="10.5" class="s-ok-text">counts: round 2</text>
+
+          <line x1="700" y1="120" x2="700" y2="240" class="s-dash" stroke-width="1.5"/>
+          <rect x="640" y="252" width="240" height="40" rx="7" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="760" y="277" text-anchor="middle" font-size="12" class="s-mono" style="fill: var(--accent)">turnIndex = 2</text>
+        </svg>
+      </div>
+      <figcaption>Counted per <em>Content entry</em>, not per response, so a turn that requested three parallel tool calls still advances the script by one. And counted only for tools <em>this branch</em> can call &mdash; the reason is the next section.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Three ADK behaviours this class had to learn the hard way</h2>
+    <p class="lede">Each was a silent failure, not an error. Each is now pinned by a regression test named after the symptom.</p>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">01</span><span class="card-name">Transfer rewrites the conversation</span><span class="chip chip--warn">wrong branch</span></div>
+      <p>When control transfers, the receiving agent does not get the raw event log. ADK rewrites the previous agent's tool calls and results into synthetic <strong>user</strong> messages prefixed <code>"For context:"</code>.</p>
+      <p><strong>Symptom:</strong> reading "the latest user message" picked up <code>"For context: ... Transfer queued"</code>, so every agent downstream of a transfer matched its <code>default</code> branch and answered the wrong question &mdash; fluently, and with no error anywhere.</p>
+      <p><strong>Fix:</strong> <code>latestUserText</code> skips any user content whose first part starts with that prefix.</p>
+    </div>
+
+    <div class="card warn">
+      <div class="card-head"><span class="card-num">02</span><span class="card-name">The inherited transfer response counted as a turn</span><span class="chip chip--warn">skipped a step</span></div>
+      <p>That same rewritten history includes the transfer's own function response. Counting it advanced the specialist to turn 1 before it had done anything, silently skipping its first tool call.</p>
+      <p><strong>Fix:</strong> <code>completedToolRounds</code> counts only responses for tools the selected branch can actually call.</p>
+    </div>
+
+    <div class="card bad">
+      <div class="card-head"><span class="card-num">03</span><span class="card-name">Parallel agents minted identical call ids</span><span class="chip chip--bad">merged in the UI</span></div>
+      <p>Two agents inside a <code>ParallelAgent</code> reach the same script position at the same moment. With ids like <code>call-0-0-searchKnowledgeBase</code>, both emitted the same id, and anything correlating results to calls by id merged two distinct tool calls into one.</p>
+      <p><strong>Fix:</strong> the model name is part of the id, not decoration &mdash; <code>callIdPrefix</code> is derived from <code>this.model</code>.</p>
+    </div>
+
+    <div class="note">
+      <span class="note-label">One more, for the record</span>
+      <p><code>transfer_to_agent</code> takes <strong><code>agentName</code></strong> in adk-js and <code>agent_name</code> in adk-python. The wrong spelling is a silent no-op rather than an error: the call succeeds, the transfer never happens, and the router answers as itself.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The streaming shape</h2>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 900 210" role="img" aria-label="Streaming emits several partial responses each carrying only the new chunk, then one final non-partial response carrying the whole accumulated text with turnComplete set.">
+          <defs><marker id="p1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0,1 9,5 0,9" class="s-head"/></marker></defs>
+
+          <text x="0" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">stream = true</text>
+
+          <rect x="0" y="30" width="170" height="56" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="16" y="52" font-size="11" class="s-mono">partial: true</text>
+          <text x="16" y="72" font-size="11.5" class="s-mono" style="fill: var(--ink)">"Order A-1001 "</text>
+
+          <line x1="173" y1="58" x2="196" y2="58" class="s-line" stroke-width="1.5" marker-end="url(#p1)"/>
+
+          <rect x="200" y="30" width="170" height="56" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="216" y="52" font-size="11" class="s-mono">partial: true</text>
+          <text x="216" y="72" font-size="11.5" class="s-mono" style="fill: var(--ink)">"has shipped "</text>
+
+          <line x1="373" y1="58" x2="396" y2="58" class="s-line" stroke-width="1.5" marker-end="url(#p1)"/>
+
+          <rect x="400" y="30" width="170" height="56" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="416" y="52" font-size="11" class="s-mono">partial: true</text>
+          <text x="416" y="72" font-size="11.5" class="s-mono" style="fill: var(--ink)">"and departed."</text>
+
+          <line x1="573" y1="58" x2="606" y2="58" class="s-line" stroke-width="1.5" marker-end="url(#p1)"/>
+
+          <rect x="610" y="20" width="290" height="76" rx="7" class="s-ok-fill" stroke-width="1.5"/>
+          <text x="628" y="44" font-size="11" class="s-ok-text">turnComplete: true</text>
+          <text x="628" y="66" font-size="11.5" class="s-mono" style="fill: var(--ink)">"Order A-1001 has shipped</text>
+          <text x="628" y="84" font-size="11.5" class="s-mono" style="fill: var(--ink)">and departed."</text>
+
+          <text x="0" y="132" font-size="11" class="s-sub">Each partial carries ONLY the new chunk. The final carries the WHOLE text, and</text>
+          <text x="0" y="150" font-size="11" class="s-sub">is not marked partial &mdash; ADK forwards partials to the caller and persists only</text>
+          <text x="0" y="168" font-size="11" class="s-sub">the final one. The adapter is written against exactly this shape.</text>
+          <text x="0" y="196" font-size="11" class="s-sub">With stream = false, one response carrying the whole text. Nothing else changes.</text>
+        </svg>
+      </div>
+      <figcaption>This is why <code>message.complete</code> can carry authoritative full text downstream: the model layer already works that way, so a dropped delta self-heals into a flicker instead of permanent corruption.</figcaption>
+    </figure>
+
+    <p>The abort signal is checked on both sides of each chunk delay, so cancelling mid-stream stops promptly rather than finishing the sentence.</p>
+  </section>
+
+  <section>
+    <h2>Branches and scripts</h2>
+    <p class="lede">A script is an ordered list of branches. The first whose <code>match</code> tests true against the prompt wins, and <code>'default'</code> always matches &mdash; so it goes last.</p>
+    <pre><code>{ match: /\b(track|shipping|where)\b/i, turns: [
+    { kind: 'toolCall', calls: [{ name: 'lookupOrder', args: { orderId: 'A-1001' } }] },
+    { kind: 'toolCall', calls: [{ name: 'checkShippingStatus', args: { orderId: 'A-1001' } }] },
+    { kind: 'text', text: 'Order A-1001 has shipped...' },
+] }</code></pre>
+    <p>Four turn kinds: <code>text</code>, <code>toolCall</code>, <code>transfer</code>, and <code>error</code> &mdash; the last so that error handling has something real to handle. Running off the end of a script emits a loud diagnostic rather than empty text, because silence is the failure mode you cannot debug.</p>
+
+    <div class="note">
+      <span class="note-label">These scripts are the eval fixture</span>
+      <p>The expectations in <code>packages/eval/evalsets</code> are written against them. Change a script and the eval tells you &mdash; which is the point: a behavioural change to an agent should not be able to land quietly.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Trace these yourself</h2>
+    <ol class="subtle">
+      <li>A turn requests three tool calls at once. By how much does the script advance when their responses come back?</li>
+      <li>A specialist receives control by transfer. Its request contains one <code>transfer_to_agent</code> response and no others. What turn index does it compute, and why does that matter?</li>
+      <li>Why does the final streamed response carry the whole text rather than the last chunk?</li>
+      <li>Two <code>ParallelAgent</code> children run the same branch simultaneously. What makes their tool calls distinguishable downstream?</li>
+    </ol>
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> By one. Rounds are counted per <code>Content</code> entry, and parallel responses arrive in a single entry. <strong>2.</strong> Zero &mdash; <code>transfer_to_agent</code> is not in that branch's tool set, so it is not counted. Counting it would skip the specialist's first tool call silently. <strong>3.</strong> Because that is what <code>GoogleLlm</code> does, and the adapter turns it into an authoritative <code>message.complete</code>; a fake that behaved differently would invalidate every test written against it. <strong>4.</strong> The call id is prefixed with the model name, which differs per agent.</p>
+    </div>
+  </section>
+
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

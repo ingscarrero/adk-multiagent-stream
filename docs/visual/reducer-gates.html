@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Four Gates and a Drain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f6;
+    --surface: #ffffff;
+    --surface-2: #f5f7fa;
+    --ink: #12161f;
+    --ink-2: #4a5464;
+    --ink-3: #626c7d;
+    --rule: #d7dde6;
+    --rule-strong: #b9c2ce;
+    --accent: #2f35c4;
+    --accent-soft: #e6e7fb;
+
+    --applied: #0e6f56;
+    --applied-soft: #dcefe8;
+    --buffered: #96590a;
+    --buffered-soft: #f8ecd8;
+    --dropped: #a82f28;
+    --dropped-soft: #f8e3e1;
+
+    --measure: 68ch;
+    --wide: 980px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1017;
+      --surface: #151a23;
+      --surface-2: #1b212c;
+      --ink: #e7eaf1;
+      --ink-2: #aeb7c6;
+      --ink-3: #808b9c;
+      --rule: #2a323f;
+      --rule-strong: #3d4757;
+      --accent: #949aff;
+      --accent-soft: #23264a;
+
+      --applied: #4cc79c;
+      --applied-soft: #14312a;
+      --buffered: #e0a54a;
+      --buffered-soft: #33270f;
+      --dropped: #f28880;
+      --dropped-soft: #38201e;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0d1017;
+    --surface: #151a23;
+    --surface-2: #1b212c;
+    --ink: #e7eaf1;
+    --ink-2: #aeb7c6;
+    --ink-3: #808b9c;
+    --rule: #2a323f;
+    --rule-strong: #3d4757;
+    --accent: #949aff;
+    --accent-soft: #23264a;
+
+    --applied: #4cc79c;
+    --applied-soft: #14312a;
+    --buffered: #e0a54a;
+    --buffered-soft: #33270f;
+    --dropped: #f28880;
+    --dropped-soft: #38201e;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: var(--wide); margin: 0 auto; padding: 0 24px 96px; }
+  .col { max-width: var(--measure); }
+
+  /* ---------- masthead ---------- */
+  header.masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 56px 0 26px;
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 1.06rem;
+    color: var(--ink-2);
+    max-width: var(--measure);
+    margin: 0;
+  }
+  .siblings { margin-top: 18px; font-size: 13px; color: var(--ink-3); }
+  .siblings a { color: var(--ink-2); }
+  .filepath {
+    display: inline-block;
+    margin-top: 20px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 4px 9px;
+  }
+
+  /* ---------- sections ---------- */
+  section { margin-bottom: 68px; }
+  h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: 1.62rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--rule-strong);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+    font-size: 1.06rem;
+    margin: 34px 0 8px;
+  }
+  p { margin: 0 0 16px; max-width: var(--measure); }
+  .lede { color: var(--ink-2); margin-top: 14px; }
+  strong { font-weight: 600; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.875em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  /* ---------- figures ---------- */
+  figure { margin: 30px 0 34px; }
+  .figframe {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 26px 22px 18px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption {
+    font-size: 13.5px;
+    color: var(--ink-3);
+    margin-top: 12px;
+    max-width: var(--measure);
+  }
+
+  /* svg paint classes &mdash; kept out of the svg so it stays self-contained */
+  .s-box { fill: var(--surface-2); stroke: var(--rule-strong); }
+  .s-line { stroke: var(--ink-3); fill: none; }
+  .s-head { fill: var(--ink-3); }
+  .s-title { fill: var(--ink); font-weight: 600; }
+  .s-sub { fill: var(--ink-3); }
+  .s-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-2); }
+  .s-applied-fill { fill: var(--applied-soft); stroke: var(--applied); }
+  .s-applied-text { fill: var(--applied); font-weight: 600; }
+  .s-buffered-fill { fill: var(--buffered-soft); stroke: var(--buffered); }
+  .s-buffered-text { fill: var(--buffered); font-weight: 600; }
+  .s-dropped-fill { fill: var(--dropped-soft); stroke: var(--dropped); }
+  .s-dropped-text { fill: var(--dropped); font-weight: 600; }
+  .s-accent-fill { fill: var(--accent-soft); stroke: var(--accent); }
+  .s-accent-text { fill: var(--accent); font-weight: 600; }
+  .s-slot { fill: var(--surface); stroke: var(--rule-strong); }
+  .s-rule { stroke: var(--rule); }
+
+  /* ---------- gate cards ---------- */
+  .gate {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule-strong);
+    border-radius: 8px;
+    padding: 20px 22px;
+    margin: 20px 0;
+  }
+  .gate.is-dropped { border-left-color: var(--dropped); }
+  .gate.is-buffered { border-left-color: var(--buffered); }
+  .gate.is-applied { border-left-color: var(--applied); }
+
+  .gate-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .gate-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+  }
+  .gate-name { font-weight: 600; font-size: 1.02rem; }
+  .gate p { margin-bottom: 0; }
+  .gate p + p { margin-top: 12px; }
+
+  .chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 2px 9px;
+    white-space: nowrap;
+  }
+  .chip--applied { color: var(--applied); background: var(--applied-soft); }
+  .chip--buffered { color: var(--buffered); background: var(--buffered-soft); }
+  .chip--dropped { color: var(--dropped); background: var(--dropped-soft); }
+  .chip--created { color: var(--accent); background: var(--accent-soft); }
+
+  pre {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 14px 0;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+  .cmt { color: var(--ink-3); }
+
+  /* ---------- traces ---------- */
+  .trace { margin: 34px 0 40px; }
+  .trace-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .trace-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-3);
+    letter-spacing: 0.08em;
+  }
+  .trace-title { font-weight: 600; font-size: 1.02rem; }
+  .trace-note { color: var(--ink-2); font-size: 0.95rem; margin: 0 0 14px; max-width: var(--measure); }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 620px; }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: baseline;
+    white-space: nowrap;
+  }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 600;
+    background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .outcome-row td { background: var(--surface-2); font-weight: 600; }
+
+  /* ---------- callouts ---------- */
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 24px 0;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  ol.subtle, ul.plain { max-width: var(--measure); padding-left: 20px; margin: 0 0 16px; }
+  ol.subtle li, ul.plain li { margin-bottom: 14px; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 18px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .legend li { display: flex; align-items: center; gap: 7px; color: var(--ink-2); }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  footer.foot {
+    border-top: 1px solid var(--rule-strong);
+    padding-top: 20px;
+    color: var(--ink-3);
+    font-size: 13.5px;
+    max-width: var(--measure);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">adk-agent-feed &middot; review notes</p>
+    <h1>Four Gates and a Drain</h1>
+    <p class="standfirst">How the feed reducer turns an out-of-order stream of events into ordered thread state &mdash; and why every event takes exactly one of three exits.</p>
+    <span class="filepath">apps/web/src/feed/reducer.ts</span>
+    <p class="siblings">Also in this set: <a href="adk-adapter.html">Many Authors, One Feed</a> &middot; <a href="sse-hub.html">One Wire, Many Threads</a> &middot; <a href="thread-runner.html">Start, Stream, Settle</a> &middot; <a href="scripted-llm.html">A Model That Never Changes Its Mind</a></p>
+  </header>
+
+  <!-- ============================= OVERVIEW ============================= -->
+  <section>
+    <h2>One event in, one outcome out</h2>
+    <p class="lede">The reducer is a pure function: <code>(state, event) &rarr; state</code>. No network, no timers, no React. Every event that arrives is <strong>applied</strong>, <strong>buffered</strong>, or <strong>dropped</strong> &mdash; never partially handled, never silently ignored.</p>
+
+    <p>Four gates decide which. They run in a fixed order, and the order is load-bearing: gate 2 can only ask "have I seen this already?" because gate 1 has guaranteed the thread exists.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 740 470" role="img" aria-label="Flowchart: an incoming FeedEvent falls through four gates. Gate 1 drops events for unknown threads unless the event is thread.created. Gate 2 drops events already applied. Gate 3 buffers events that arrive early. Gate 4 applies the event and drains the buffer.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0,1 9,5 0,9" class="s-head"/>
+            </marker>
+          </defs>
+
+          <!-- entry -->
+          <rect x="118" y="6" width="164" height="32" rx="16" class="s-accent-fill" stroke-width="1.5"/>
+          <text x="200" y="26" text-anchor="middle" font-size="12.5" class="s-accent-text s-mono" style="fill: var(--accent)">FeedEvent</text>
+          <line x1="200" y1="38" x2="200" y2="56" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+
+          <!-- gate 1 -->
+          <rect x="60" y="58" width="280" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="76" y="80" font-size="12.5" class="s-title">Gate 1 &middot; thread known?</text>
+          <text x="76" y="100" font-size="11" class="s-mono">!state.threads[threadId]</text>
+          <text x="76" y="114" font-size="11" class="s-mono">&amp;&amp; type !== 'thread.created'</text>
+          <line x1="340" y1="90" x2="464" y2="90" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="402" y="82" text-anchor="middle" font-size="10.5" class="s-sub">yes</text>
+
+          <line x1="200" y1="122" x2="200" y2="148" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="212" y="139" font-size="10.5" class="s-sub">no</text>
+
+          <!-- gate 2 -->
+          <rect x="60" y="150" width="280" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="76" y="172" font-size="12.5" class="s-title">Gate 2 &middot; already applied?</text>
+          <text x="76" y="196" font-size="11" class="s-mono">seq &lt;= lastSeq</text>
+          <line x1="340" y1="182" x2="464" y2="182" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="402" y="174" text-anchor="middle" font-size="10.5" class="s-sub">yes</text>
+
+          <line x1="200" y1="214" x2="200" y2="240" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="212" y="231" font-size="10.5" class="s-sub">no</text>
+
+          <!-- gate 3 -->
+          <rect x="60" y="242" width="280" height="64" rx="7" class="s-box" stroke-width="1.5"/>
+          <text x="76" y="264" font-size="12.5" class="s-title">Gate 3 &middot; arrived early?</text>
+          <text x="76" y="288" font-size="11" class="s-mono">seq &gt; lastSeq + 1</text>
+          <line x1="340" y1="274" x2="464" y2="274" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="402" y="266" text-anchor="middle" font-size="10.5" class="s-sub">yes</text>
+
+          <line x1="200" y1="306" x2="200" y2="356" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+          <text x="212" y="334" font-size="10.5" class="s-sub">no</text>
+
+          <!-- gate 4 -->
+          <rect x="60" y="358" width="280" height="76" rx="7" class="s-applied-fill" stroke-width="1.5"/>
+          <text x="76" y="382" font-size="12.5" class="s-applied-text">Gate 4 &middot; exactly next</text>
+          <text x="76" y="404" font-size="11" class="s-mono">seq === lastSeq + 1</text>
+          <text x="76" y="422" font-size="11" class="s-mono">&rarr; apply, then drain buffer</text>
+          <line x1="340" y1="396" x2="464" y2="396" class="s-line" stroke-width="1.5" marker-end="url(#ah)"/>
+
+          <!-- outcomes -->
+          <rect x="468" y="68" width="242" height="44" rx="7" class="s-dropped-fill" stroke-width="1.5"/>
+          <text x="486" y="88" font-size="12" class="s-dropped-text">DROPPED</text>
+          <text x="486" y="104" font-size="10.5" class="s-sub">joined mid-stream, no provenance</text>
+
+          <rect x="468" y="160" width="242" height="44" rx="7" class="s-dropped-fill" stroke-width="1.5"/>
+          <text x="486" y="180" font-size="12" class="s-dropped-text">DROPPED</text>
+          <text x="486" y="196" font-size="10.5" class="s-sub">replay after reconnect</text>
+
+          <rect x="468" y="252" width="242" height="44" rx="7" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="486" y="272" font-size="12" class="s-buffered-text">BUFFERED</text>
+          <text x="486" y="288" font-size="10.5" class="s-sub">held until the gap closes</text>
+
+          <rect x="468" y="374" width="242" height="44" rx="7" class="s-applied-fill" stroke-width="1.5"/>
+          <text x="486" y="394" font-size="12" class="s-applied-text">APPLIED</text>
+          <text x="486" y="410" font-size="10.5" class="s-sub">state advances, buffer drains</text>
+
+          <!-- side-note: creation bypass -->
+          <line x1="200" y1="46" x2="60" y2="46" class="s-rule" stroke-width="1" stroke-dasharray="3 3"/>
+          <line x1="60" y1="46" x2="60" y2="396" class="s-rule" stroke-width="1" stroke-dasharray="3 3"/>
+          <line x1="60" y1="396" x2="56" y2="396" class="s-rule" stroke-width="1"/>
+          <text x="8" y="228" font-size="10" class="s-sub" transform="rotate(-90 20 228)">thread.created bypasses 2&ndash;4</text>
+        </svg>
+      </div>
+      <figcaption>Every event falls through the gates in order and exits at the first one that matches. The dashed line is the exception: <code>thread.created</code> for an unknown thread creates the thread and applies immediately, without consulting the sequence gates at all.</figcaption>
+    </figure>
+
+    <ul class="legend">
+      <li><span class="swatch" style="background: var(--applied)"></span>Applied &mdash; state moved forward</li>
+      <li><span class="swatch" style="background: var(--buffered)"></span>Buffered &mdash; held, not lost</li>
+      <li><span class="swatch" style="background: var(--dropped)"></span>Dropped &mdash; deliberately discarded</li>
+    </ul>
+  </section>
+
+  <!-- ============================= OUTCOMES ============================= -->
+  <section>
+    <h2>What the three outcomes actually mean</h2>
+    <p class="lede">The words are precise, not descriptive labels. Each one names a different fate for the event and a different consequence for state &mdash; and only one of the three is ever visible on screen.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 404" role="img" aria-label="One thread state at lastSeq 3 forks three ways. An applied event advances lastSeq to 4 and grows the text. A buffered event leaves lastSeq at 3 and parks the event in the buffer. A dropped event changes nothing at all.">
+          <defs>
+            <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0,1 9,5 0,9" class="s-head"/>
+            </marker>
+          </defs>
+
+          <!-- before -->
+          <rect x="325" y="8" width="290" height="120" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="343" y="32" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">THREAD STATE</text>
+          <line x1="343" y1="44" x2="597" y2="44" class="s-rule" stroke-width="1"/>
+          <text x="343" y="68" font-size="12" class="s-mono">lastSeq</text>
+          <text x="470" y="68" font-size="12" class="s-mono" style="fill: var(--ink)">3</text>
+          <text x="343" y="90" font-size="12" class="s-mono">buffered</text>
+          <text x="470" y="90" font-size="12" class="s-mono" style="fill: var(--ink)">[]</text>
+          <text x="343" y="112" font-size="12" class="s-mono">text</text>
+          <text x="470" y="112" font-size="12" class="s-mono" style="fill: var(--ink)">"AB"</text>
+
+          <!-- fan -->
+          <line x1="420" y1="128" x2="160" y2="174" class="s-line" stroke-width="1.5" marker-end="url(#ah3)"/>
+          <line x1="470" y1="128" x2="470" y2="174" class="s-line" stroke-width="1.5" marker-end="url(#ah3)"/>
+          <line x1="520" y1="128" x2="780" y2="174" class="s-line" stroke-width="1.5" marker-end="url(#ah3)"/>
+          <text x="243" y="142" font-size="11" class="s-mono s-applied-text" style="fill: var(--applied)">seq 4 arrives</text>
+          <text x="484" y="152" font-size="11" class="s-mono s-buffered-text" style="fill: var(--buffered)">seq 6 arrives</text>
+          <text x="620" y="142" font-size="11" class="s-mono s-dropped-text" style="fill: var(--dropped)">seq 2 arrives</text>
+
+          <!-- applied -->
+          <rect x="0" y="180" width="290" height="216" rx="8" class="s-applied-fill" stroke-width="1.5"/>
+          <text x="18" y="206" font-size="12.5" class="s-applied-text">APPLIED</text>
+          <text x="18" y="224" font-size="10.5" class="s-sub">folded into state</text>
+          <line x1="18" y1="238" x2="272" y2="238" class="s-rule" stroke-width="1"/>
+          <text x="18" y="264" font-size="12" class="s-mono">lastSeq</text>
+          <text x="140" y="264" font-size="12" class="s-mono s-applied-text" style="fill: var(--applied)">4</text>
+          <text x="18" y="290" font-size="12" class="s-mono">buffered</text>
+          <text x="140" y="290" font-size="12" class="s-mono">[]</text>
+          <text x="18" y="316" font-size="12" class="s-mono">text</text>
+          <text x="140" y="316" font-size="12" class="s-mono s-applied-text" style="fill: var(--applied)">"ABC"</text>
+          <line x1="18" y1="336" x2="272" y2="336" class="s-rule" stroke-width="1"/>
+          <text x="18" y="358" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">USER SEES</text>
+          <text x="18" y="378" font-size="12" style="fill: var(--ink)">text grows, chip may change</text>
+
+          <!-- buffered -->
+          <rect x="325" y="180" width="290" height="216" rx="8" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="343" y="206" font-size="12.5" class="s-buffered-text">BUFFERED</text>
+          <text x="343" y="224" font-size="10.5" class="s-sub">kept, applied later</text>
+          <line x1="343" y1="238" x2="597" y2="238" class="s-rule" stroke-width="1"/>
+          <text x="343" y="264" font-size="12" class="s-mono">lastSeq</text>
+          <text x="465" y="264" font-size="12" class="s-mono">3</text>
+          <text x="343" y="290" font-size="12" class="s-mono">buffered</text>
+          <text x="465" y="290" font-size="12" class="s-mono s-buffered-text" style="fill: var(--buffered)">[6]</text>
+          <text x="343" y="316" font-size="12" class="s-mono">text</text>
+          <text x="465" y="316" font-size="12" class="s-mono">"AB"</text>
+          <line x1="343" y1="336" x2="597" y2="336" class="s-rule" stroke-width="1"/>
+          <text x="343" y="358" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">USER SEES</text>
+          <text x="343" y="378" font-size="12" class="s-sub">nothing at all</text>
+
+          <!-- dropped -->
+          <rect x="650" y="180" width="290" height="216" rx="8" class="s-dropped-fill" stroke-width="1.5"/>
+          <text x="668" y="206" font-size="12.5" class="s-dropped-text">DROPPED</text>
+          <text x="668" y="224" font-size="10.5" class="s-sub">discarded permanently</text>
+          <line x1="668" y1="238" x2="922" y2="238" class="s-rule" stroke-width="1"/>
+          <text x="668" y="264" font-size="12" class="s-mono">lastSeq</text>
+          <text x="790" y="264" font-size="12" class="s-mono">3</text>
+          <text x="668" y="290" font-size="12" class="s-mono">buffered</text>
+          <text x="790" y="290" font-size="12" class="s-mono">[]</text>
+          <text x="668" y="316" font-size="12" class="s-mono">text</text>
+          <text x="790" y="316" font-size="12" class="s-mono">"AB"</text>
+          <line x1="668" y1="336" x2="922" y2="336" class="s-rule" stroke-width="1"/>
+          <text x="668" y="358" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">USER SEES</text>
+          <text x="668" y="378" font-size="12" class="s-sub">nothing at all</text>
+        </svg>
+      </div>
+      <figcaption>The same thread, three fates. Only the applied branch moves <code>lastSeq</code> or changes anything the user can see; buffering parks the event and drops discard it. Coloured fields are the ones that changed.</figcaption>
+    </figure>
+
+    <div class="tablewrap" style="margin-bottom: 28px">
+      <table>
+        <thead><tr><th></th><th>Applied</th><th>Buffered</th><th>Dropped</th></tr></thead>
+        <tbody>
+          <tr><td>the event is&hellip;</td><td>folded into state</td><td>held for later</td><td>discarded</td></tr>
+          <tr><td class="mono">lastSeq</td><td>advances</td><td>unchanged</td><td>unchanged</td></tr>
+          <tr><td>thread content</td><td>changes</td><td>unchanged</td><td>unchanged</td></tr>
+          <tr><td>recoverable later</td><td>n/a</td><td>yes, when the gap closes</td><td>no</td></tr>
+          <tr><td>counter</td><td class="mono">stats.applied</td><td class="mono">stats.buffered</td><td class="mono">droppedRedundant<br>droppedLossy</td></tr>
+          <tr><td>React re-renders</td><td>yes, visibly</td><td>yes, invisibly</td><td>yes, invisibly</td></tr>
+          <tr><td>feed auto-scrolls</td><td>yes</td><td>no</td><td>no</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Applied &mdash; the only outcome with a visible effect</h3>
+    <p><code>applyToThread</code> folds the event into the thread and <code>lastSeq</code> moves to the event&rsquo;s <code>seq</code>. What actually changes depends entirely on the event type:</p>
+    <div class="tablewrap" style="margin-bottom: 20px">
+      <table>
+        <thead><tr><th>event</th><th>effect on thread state</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">thread.status</td><td>status moves &mdash; but only if the transition is legal, otherwise silently kept</td></tr>
+          <tr><td class="mono">thread.error</td><td><code>error</code> is set; the transcript so far is preserved</td></tr>
+          <tr><td class="mono">message.delta</td><td>text appended to <code>messages[messageId]</code>, created if new</td></tr>
+          <tr><td class="mono">message.complete</td><td>text <em>replaced</em> wholesale, <code>streaming</code> set false</td></tr>
+          <tr><td class="mono">tool.call</td><td>tool recorded as <code>pending</code></td></tr>
+          <tr><td class="mono">tool.result</td><td>tool becomes <code>done</code>, original <code>args</code> retained</td></tr>
+          <tr><td class="mono">thread.created</td><td>nothing &mdash; the thread was already built by <code>createThread</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A message or tool seen for the first time also gets appended to <code>timeline</code>, which is what fixes its position in the rendered thread. Applying is the only outcome that then runs the drain.</p>
+
+    <h3>Buffered &mdash; deferred, not rejected</h3>
+    <p>The event is <strong>kept</strong>. It sits in <code>thread.buffered</code> holding its full payload, waiting for its predecessors. Nothing about the visible thread changes, and <code>lastSeq</code> does not move &mdash; which is exactly why a buffered event can&rsquo;t be mistaken for a delivered one.</p>
+    <p>Two consequences worth knowing. Memory: the buffer is unbounded on the client, so a permanently open gap grows it for the life of the session. And appearance: a stalled thread looks identical to a slow one. The user sees &ldquo;Waiting for the agent&hellip;&rdquo; either way, with nothing distinguishing a thread that will recover from one that never will.</p>
+
+    <h3>Dropped &mdash; two different things wearing one name</h3>
+    <p>The event is discarded and will not be re-sent. But <em>why</em> it was discarded matters enormously, and the three drop sites split cleanly into two kinds:</p>
+
+    <div class="gate is-applied" style="border-left-color: var(--applied)">
+      <div class="gate-head">
+        <span class="gate-name">Redundant drops &mdash; healthy</span>
+        <span class="chip chip--applied">no information lost</span>
+      </div>
+      <p>Gate 2 (already applied) and gate 3&rsquo;s inner check (already buffered). The event&rsquo;s information is <strong>already in state</strong>, so discarding the copy is not just safe, it is the correct behaviour. These are the drops that make the reducer idempotent, and you should expect a burst of them after every single reconnect.</p>
+    </div>
+
+    <div class="gate is-dropped">
+      <div class="gate-head">
+        <span class="gate-name">Lossy drops &mdash; a symptom</span>
+        <span class="chip chip--dropped">information destroyed</span>
+      </div>
+      <p>Gate 1 (unknown thread). The event carried content the client has never seen and never will &mdash; the server does not re-send on request. Every one of these is a hole in the feed, and because gate 1 keeps firing for that thread, one lost <code>thread.created</code> means the entire thread is invisible for the rest of the session.</p>
+    </div>
+
+    <p>They are counted separately &mdash; <code>stats.droppedRedundant</code> and <code>stats.droppedLossy</code> &mdash; precisely so the two can be told apart, with <code>totalDropped(stats)</code> for the places where the distinction does not matter. Each of the three drop sites in <code>reducer.ts</code> is labelled <code>REDUNDANT</code> or <code>LOSSY</code> at the point of the increment.</p>
+
+    <p>This was one counter until recently, and the split mattered more than its size suggests: <code>droppedLossy</code> is the signal that a thread has gone missing. Buried alongside the replay drops that follow every reconnect, the one number meaning &ldquo;the feed is incomplete&rdquo; was indistinguishable from noise.</p>
+
+    <h3>Recovering from a lossy drop</h3>
+    <p>A lossy drop is no longer permanent. The server sends a <code>resync</code> frame whenever a client is missing the beginning of a session &mdash; either <em>resuming</em> from an offset older than anything still buffered, or connecting <em>fresh</em> to a session whose start has already rolled out, which is what a page reload does. The client then tears the stream down, fetches <code>GET /api/threads</code> for a snapshot, dispatches a <code>resync</code> action, and reconnects without a resume point so the server replays everything it still holds.</p>
+
+    <p>That second trigger is easy to miss, and was: the first version of the fix handled only the resuming case, and tests at three separate layers all passed while a plain page reload still lost the thread. A fresh client has no stale offset to be wrong about &mdash; it simply starts in the middle.</p>
+    <p>A rebuilt thread is marked <em>awaiting resume</em> rather than seeking forward to the snapshot&rsquo;s <code>lastSeq</code>. The next event for it is accepted wherever it lands, and its <code>seq</code> answers the only question that matters: arriving at 1 means the replay has the whole thread and nothing was lost; arriving higher means a prefix is genuinely gone. The client does not guess what it missed &mdash; it finds out. Traces G and H are the two outcomes, running identical code.</p>
+    <p>Identity and status come back; the transcript does not, because events live only in the buffer. A rebuilt thread carries <code>historyTruncated</code> and says so on screen rather than passing itself off as complete.</p>
+
+    <div class="note">
+      <span class="note-label">Reading the counters</span>
+      <p><strong>droppedRedundant climbing after a reconnect</strong> &mdash; normal, that is replay overlap. <strong>droppedLossy above zero</strong> &mdash; the feed is missing something; expect a <code>resyncs</code> tick shortly after as recovery kicks in. <strong>buffered non-zero and a thread stuck below its neighbours</strong> &mdash; an open gap; check whether the server skipped a <code>seq</code>. <strong>applied flat while the server is streaming</strong> &mdash; delivering but nothing contiguous, the stalled case.</p>
+      <p>All four counters live on <code>FeedState</code> but only <code>applied</code> is consumed, as the sticky-scroll trigger in <code>App.tsx</code>. A debug panel is the cheapest observability this app could add, and <code>droppedLossy</code> is the one number worth alerting on.</p>
+    </div>
+
+    <div class="note">
+      <span class="note-label">One honest inefficiency</span>
+      <p>Every outcome returns a new state object, including the drops &mdash; so <code>useReducer</code> re-renders even when nothing changed. Replaying 300 duplicates after a reconnect costs 300 renders with zero visual difference. Returning the identical <code>state</code> reference on a redundant drop would let React bail out entirely; the only reason it doesn&rsquo;t is that the drop still increments a counter.</p>
+    </div>
+  </section>
+
+  <!-- ============================= THE GATES ============================= -->
+  <section>
+    <h2>The gates, one at a time</h2>
+    <p class="lede">Each gate exists because a specific real-world condition produces it. None of them are defensive programming; every one fires in normal operation.</p>
+
+    <div class="gate is-dropped">
+      <div class="gate-head">
+        <span class="gate-num">GATE 1</span>
+        <span class="gate-name">Unknown thread, and not a birth certificate</span>
+        <span class="chip chip--dropped">dropped &middot; lossy</span>
+      </div>
+      <pre><code>if (!existing) {
+  if (event.type !== 'thread.created') { stats.droppedLossy += 1; return state; }
+  <span class="cmt">// otherwise: create the thread, apply, done</span>
+}</code></pre>
+      <p><strong>When it fires:</strong> you connected to the stream and the very first event you saw for some thread was a <code>message.delta</code> &mdash; no <code>thread.created</code> ever arrived.</p>
+      <p><strong>Why drop rather than improvise:</strong> a thread you invent has no prompt and no agent name. Rendering an anonymous box streaming text from nowhere is worse than rendering nothing. The drop is the honest outcome.</p>
+      <p><strong>How you get here in practice:</strong> the server's replay buffer holds 500 events per session. Reconnect after it has rolled past this thread's <code>thread.created</code> and every subsequent event for that thread is dropped &mdash; the thread vanishes. The server sends a <code>resync</code> frame for exactly this case, and the client rebuilds the thread from a snapshot when it arrives &mdash; see <em>Recovering from a lossy drop</em> below, and traces G and H. Until that notice arrives, this branch keeps firing and every one of those drops is counted as <code>droppedLossy</code>.</p>
+    </div>
+
+    <div class="gate is-dropped">
+      <div class="gate-head">
+        <span class="gate-num">GATE 2</span>
+        <span class="gate-name">Already applied</span>
+        <span class="chip chip--dropped">dropped &middot; redundant</span>
+      </div>
+      <pre><code>if (event.seq &lt;= existing.lastSeq) { stats.droppedRedundant += 1; return state; }</code></pre>
+      <p><strong>When it fires:</strong> every single reconnect. <code>Last-Event-ID</code> resumes from the last event the browser <em>received</em>, and the server replays from there &mdash; so overlap is the normal case, not an error case.</p>
+      <p><strong>Why it matters:</strong> this one gate is what makes the whole reducer idempotent. Replay the entire stream twice and you get identical state, which is asserted directly in <code>reducer.test.ts</code>.</p>
+      <p><code>&lt;=</code> and not <code>&lt;</code>: <code>lastSeq</code> is the highest seq already <em>applied</em>, so an event equal to it is a duplicate too.</p>
+    </div>
+
+    <div class="gate is-buffered">
+      <div class="gate-head">
+        <span class="gate-num">GATE 3</span>
+        <span class="gate-name">Arrived early</span>
+        <span class="chip chip--buffered">buffered</span>
+        <span class="chip chip--dropped">or dropped &middot; redundant</span>
+      </div>
+      <pre><code>if (event.seq &gt; existing.lastSeq + 1) {
+  if (existing.buffered.some((held) =&gt; held.seq === event.seq)) {
+    stats.droppedRedundant += 1; return state;   <span class="cmt">// already held</span>
+  }
+  stats.buffered += 1;
+  return { ...state, threads: { ...,  buffered: [...existing.buffered, event] } };
+}</code></pre>
+      <p><strong>When it fires:</strong> seq 5 shows up while you're still waiting on seq 3. Holding it is the only correct move &mdash; applying it would append text in the wrong place, and dropping it would lose content that will never be re-sent.</p>
+      <p><strong>The nested drop</strong> catches a duplicate of an event already sitting in the buffer. Gate 2 can't catch that one, because a buffered event hasn't advanced <code>lastSeq</code> yet.</p>
+      <p><strong>The buffer is not sorted.</strong> Events are appended in arrival order and looked up by <code>seq</code>. There is no ordering invariant to maintain, so there's nothing to get wrong.</p>
+    </div>
+
+    <div class="gate is-applied">
+      <div class="gate-head">
+        <span class="gate-num">GATE 4</span>
+        <span class="gate-name">Exactly the next one</span>
+        <span class="chip chip--applied">applied</span>
+      </div>
+      <pre><code><span class="cmt">// implicit: seq === lastSeq + 1</span>
+const updated = applyWithDrain(existing, event, stats);</code></pre>
+      <p>Not a written condition &mdash; it's what's left once gates 2 and 3 have excluded everything below and everything above. The event is applied, and then the buffer is drained for as long as it keeps yielding successors.</p>
+    </div>
+  </section>
+
+  <!-- ============================= DRAIN ============================= -->
+  <section>
+    <h2>The drain</h2>
+    <p class="lede">Buffering alone would stall forever. The drain is what makes out-of-order delivery invisible instead of merely survivable: the moment the missing event lands, everything queued behind it is applied in one pass, and the UI renders once.</p>
+
+    <pre><code>let current = applyToThread(thread, event);
+stats.applied += 1;
+
+while (current.buffered.length &gt; 0) {
+  const nextIndex = current.buffered.findIndex((held) =&gt; held.seq === current.lastSeq + 1);
+  if (nextIndex === -1) break;                   <span class="cmt">// gap still open &mdash; stop</span>
+
+  const held = current.buffered[nextIndex]!;
+  const remaining = current.buffered.filter((_, i) =&gt; i !== nextIndex);
+  current = { ...applyToThread(current, held), buffered: remaining };
+  stats.applied += 1;
+}</code></pre>
+
+    <p>Each iteration applies one held event, which advances <code>lastSeq</code>, which may make the next held event eligible. It terminates for a boring but important reason: every iteration removes exactly one element from a finite array.</p>
+
+    <figure>
+      <div class="figframe">
+        <svg viewBox="0 0 940 286" role="img" aria-label="Four-step trace: starting at lastSeq 1 with events 4 and 3 held in the buffer, applying seq 2 renders A, then the drain applies seq 3 rendering AB, then seq 4 rendering ABC, leaving the buffer empty.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0,1 9,5 0,9" class="s-head"/>
+            </marker>
+          </defs>
+
+          <!-- panel 1 -->
+          <text x="0" y="16" font-size="10.5" class="s-sub s-mono" style="letter-spacing:0.08em">BEFORE</text>
+          <rect x="0" y="26" width="210" height="212" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="18" y="52" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">LASTSEQ</text>
+          <text x="18" y="82" font-size="24" class="s-mono s-title" style="fill: var(--ink)">1</text>
+          <line x1="18" y1="98" x2="192" y2="98" class="s-rule" stroke-width="1"/>
+          <text x="18" y="120" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">BUFFER</text>
+          <rect x="18" y="130" width="38" height="28" rx="5" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="37" y="149" text-anchor="middle" font-size="13" class="s-buffered-text s-mono" style="fill: var(--buffered)">4</text>
+          <rect x="64" y="130" width="38" height="28" rx="5" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="83" y="149" text-anchor="middle" font-size="13" class="s-buffered-text s-mono" style="fill: var(--buffered)">3</text>
+          <line x1="18" y1="176" x2="192" y2="176" class="s-rule" stroke-width="1"/>
+          <text x="18" y="198" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">RENDERED</text>
+          <text x="18" y="222" font-size="15" class="s-mono" style="fill: var(--ink-3)">""</text>
+
+          <line x1="213" y1="132" x2="240" y2="132" class="s-line" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+          <!-- panel 2 -->
+          <text x="243" y="16" font-size="10.5" class="s-applied-text s-mono" style="letter-spacing:0.08em">APPLY seq 2</text>
+          <rect x="243" y="26" width="210" height="212" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="261" y="52" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">LASTSEQ</text>
+          <text x="261" y="82" font-size="24" class="s-mono s-applied-text" style="fill: var(--applied)">2</text>
+          <line x1="261" y1="98" x2="435" y2="98" class="s-rule" stroke-width="1"/>
+          <text x="261" y="120" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">BUFFER</text>
+          <rect x="261" y="130" width="38" height="28" rx="5" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="280" y="149" text-anchor="middle" font-size="13" class="s-mono" style="fill: var(--buffered)">4</text>
+          <rect x="307" y="130" width="38" height="28" rx="5" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="326" y="149" text-anchor="middle" font-size="13" class="s-mono" style="fill: var(--buffered)">3</text>
+          <line x1="261" y1="176" x2="435" y2="176" class="s-rule" stroke-width="1"/>
+          <text x="261" y="198" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">RENDERED</text>
+          <text x="261" y="222" font-size="15" class="s-mono" style="fill: var(--ink)">"A"</text>
+
+          <line x1="456" y1="132" x2="483" y2="132" class="s-line" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+          <!-- panel 3 -->
+          <text x="486" y="16" font-size="10.5" class="s-applied-text s-mono" style="letter-spacing:0.08em">DRAIN seq 3</text>
+          <rect x="486" y="26" width="210" height="212" rx="8" class="s-box" stroke-width="1.5"/>
+          <text x="504" y="52" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">LASTSEQ</text>
+          <text x="504" y="82" font-size="24" class="s-mono s-applied-text" style="fill: var(--applied)">3</text>
+          <line x1="504" y1="98" x2="678" y2="98" class="s-rule" stroke-width="1"/>
+          <text x="504" y="120" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">BUFFER</text>
+          <rect x="504" y="130" width="38" height="28" rx="5" class="s-buffered-fill" stroke-width="1.5"/>
+          <text x="523" y="149" text-anchor="middle" font-size="13" class="s-mono" style="fill: var(--buffered)">4</text>
+          <line x1="504" y1="176" x2="678" y2="176" class="s-rule" stroke-width="1"/>
+          <text x="504" y="198" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">RENDERED</text>
+          <text x="504" y="222" font-size="15" class="s-mono" style="fill: var(--ink)">"AB"</text>
+
+          <line x1="699" y1="132" x2="726" y2="132" class="s-line" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+          <!-- panel 4 -->
+          <text x="729" y="16" font-size="10.5" class="s-applied-text s-mono" style="letter-spacing:0.08em">DRAIN seq 4</text>
+          <rect x="729" y="26" width="210" height="212" rx="8" class="s-applied-fill" stroke-width="1.5"/>
+          <text x="747" y="52" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">LASTSEQ</text>
+          <text x="747" y="82" font-size="24" class="s-mono s-applied-text" style="fill: var(--applied)">4</text>
+          <line x1="747" y1="98" x2="921" y2="98" class="s-rule" stroke-width="1"/>
+          <text x="747" y="120" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">BUFFER</text>
+          <rect x="747" y="130" width="80" height="28" rx="5" class="s-slot" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <text x="787" y="149" text-anchor="middle" font-size="11.5" class="s-mono" style="fill: var(--ink-3)">empty</text>
+          <line x1="747" y1="176" x2="921" y2="176" class="s-rule" stroke-width="1"/>
+          <text x="747" y="198" font-size="10" class="s-sub s-mono" style="letter-spacing:0.09em">RENDERED</text>
+          <text x="747" y="222" font-size="15" class="s-mono" style="fill: var(--ink)">"ABC"</text>
+
+          <text x="0" y="268" font-size="11" class="s-sub">Steps 2&ndash;4 happen inside a single reducer call &mdash; React renders once, with the finished text.</text>
+        </svg>
+      </div>
+      <figcaption>The canonical case, straight from <code>reducer.test.ts</code>: events arrive 1, 4, 3, 2 and the message still reads <code>"ABC"</code>. Only the arrival of seq 2 unblocks anything; 3 and 4 were already in hand.</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="note-label">The claim this makes testable</span>
+      <p>Because the drain is synchronous and pure, "the network delivered these frames in this order" becomes an array literal. No browser, no timing, no flake &mdash; which is why the ordering tests can afford to be exhaustive.</p>
+    </div>
+  </section>
+
+  <!-- ============================= TRACES ============================= -->
+  <section>
+    <h2>Eight traces</h2>
+    <p class="lede">Read the <code>gate</code> column first &mdash; it's the whole story. Every row is one call to <code>feedReducer</code>.</p>
+
+    <!-- A -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE A</span><span class="trace-title">In order, nothing clever</span></div>
+      <p class="trace-note">The baseline. Every event is exactly the next one, so gate 4 catches all of them and the buffer is never touched.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">seq</th><th>event</th><th>gate</th><th class="mono">lastSeq</th><th class="mono">buffer</th><th class="mono">text</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">1</td><td class="mono">thread.created</td><td><span class="chip chip--created">created</span></td><td class="mono num">1</td><td class="mono">[]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">2</td><td class="mono">status running</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">2</td><td class="mono">[]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">3</td><td class="mono">status streaming</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">3</td><td class="mono">[]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">delta "Hello "</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">4</td><td class="mono">[]</td><td class="mono">"Hello "</td></tr>
+            <tr><td class="mono num">5</td><td class="mono">delta "world"</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">5</td><td class="mono">[]</td><td class="mono">"Hello world"</td></tr>
+            <tr><td class="mono num">6</td><td class="mono">complete "Hello world"</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">6</td><td class="mono">[]</td><td class="mono">"Hello world"</td></tr>
+            <tr><td class="mono num">7</td><td class="mono">status complete</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">7</td><td class="mono">[]</td><td class="mono">"Hello world"</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">applied 7 &middot; buffered 0 &middot; no drops &mdash; streaming flag flips false at seq 6</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE B</span><span class="trace-title">Out of order &mdash; the drain in table form</span></div>
+      <p class="trace-note">The same sequence as the diagram above. Note that seq 2 is the only event that applies anything directly; it arrives last and unblocks both held events at once.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">arrives</th><th>event</th><th>gate</th><th class="mono">lastSeq</th><th class="mono">buffer</th><th class="mono">text</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">1</td><td class="mono">thread.created</td><td><span class="chip chip--created">created</span></td><td class="mono num">1</td><td class="mono">[]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">delta "C"</td><td><span class="chip chip--buffered">gate 3</span></td><td class="mono num">1</td><td class="mono">[4]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">3</td><td class="mono">delta "B"</td><td><span class="chip chip--buffered">gate 3</span></td><td class="mono num">1</td><td class="mono">[4, 3]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">2</td><td class="mono">delta "A"</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">4</td><td class="mono">[]</td><td class="mono">"ABC"</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">applied 4 &middot; buffered 2 &middot; no drops &mdash; one render, correct text</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- C -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE C</span><span class="trace-title">A gap that never closes</span></div>
+      <p class="trace-note">The failure mode. seq 2 is lost and never re-sent, so nothing after it can ever be applied &mdash; the thread sits at <code>lastSeq 1</code> showing "Waiting for the agent&hellip;" while events pile up behind it.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">arrives</th><th>event</th><th>gate</th><th class="mono">lastSeq</th><th class="mono">buffer</th><th class="mono">text</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">1</td><td class="mono">thread.created</td><td><span class="chip chip--created">created</span></td><td class="mono num">1</td><td class="mono">[]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">3</td><td class="mono">delta "B"</td><td><span class="chip chip--buffered">gate 3</span></td><td class="mono num">1</td><td class="mono">[3]</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono num">5</td><td class="mono">delta "D"</td><td><span class="chip chip--buffered">gate 3</span></td><td class="mono num">1</td><td class="mono">[3, 5]</td><td class="mono">&mdash;</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">applied 1 &middot; buffered 2 &middot; no drops &mdash; permanently stalled</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="trace-note" style="margin-top:14px">This is why <code>seq</code> is assigned in exactly one place on the server &mdash; <code>ThreadRunner.emit</code>. A skipped sequence number isn't a cosmetic bug; it wedges the thread forever. It's also the strongest argument for the unbuilt <code>resync</code> handler: nothing currently recovers from this state.</p>
+    </div>
+
+    <!-- D -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE D</span><span class="trace-title">Reconnect, with replay overlap</span></div>
+      <p class="trace-note">Events 1&ndash;5 already applied. The connection drops, the browser reconnects with <code>Last-Event-ID</code>, and the server replays from 3 because that's the last offset it knows the client received.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">arrives</th><th>event</th><th>gate</th><th class="mono">lastSeq</th><th class="mono">buffer</th><th>effect</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">3</td><td class="mono">delta (replayed)</td><td><span class="chip chip--dropped">gate 2</span></td><td class="mono num">5</td><td class="mono">[]</td><td>none</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">delta (replayed)</td><td><span class="chip chip--dropped">gate 2</span></td><td class="mono num">5</td><td class="mono">[]</td><td>none</td></tr>
+            <tr><td class="mono num">5</td><td class="mono">delta (replayed)</td><td><span class="chip chip--dropped">gate 2</span></td><td class="mono num">5</td><td class="mono">[]</td><td>none</td></tr>
+            <tr><td class="mono num">6</td><td class="mono">complete</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">6</td><td class="mono">[]</td><td>text replaced</td></tr>
+            <tr><td class="mono num">7</td><td class="mono">status complete</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">7</td><td class="mono">[]</td><td>thread done</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">applied 2 &middot; buffered 0 &middot; droppedRedundant 3 &mdash; no duplicate text anywhere</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- E -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE E</span><span class="trace-title">Joined mid-stream</span></div>
+      <p class="trace-note">A thread the client has never heard of. Gate 1 refuses to invent it, and keeps refusing for every subsequent event &mdash; the thread is invisible for the rest of the session.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">arrives</th><th>event</th><th>gate</th><th>state</th><th>effect</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">2</td><td class="mono">delta (thread T-9)</td><td><span class="chip chip--dropped">gate 1 &middot; lossy</span></td><td class="mono">no thread T-9</td><td>droppedLossy++</td></tr>
+            <tr><td class="mono num">3</td><td class="mono">delta (thread T-9)</td><td><span class="chip chip--dropped">gate 1 &middot; lossy</span></td><td class="mono">no thread T-9</td><td>droppedLossy++</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">complete (thread T-9)</td><td><span class="chip chip--dropped">gate 1 &middot; lossy</span></td><td class="mono">no thread T-9</td><td>droppedLossy++</td></tr>
+            <tr class="outcome-row"><td colspan="5" class="mono">applied 0 &middot; droppedLossy 3 &mdash; thread never renders, until a resync arrives (trace G)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- F -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE F</span><span class="trace-title">Duplicate of a buffered event</span></div>
+      <p class="trace-note">The branch gate 2 can't reach. seq 4 is held but hasn't advanced <code>lastSeq</code>, so a second copy of seq 4 sails past gate 2 and is caught by gate 3's inner check instead.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th class="mono">arrives</th><th>event</th><th>gate</th><th class="mono">lastSeq</th><th class="mono">buffer</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">1</td><td class="mono">thread.created</td><td><span class="chip chip--created">created</span></td><td class="mono num">1</td><td class="mono">[]</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">delta "X"</td><td><span class="chip chip--buffered">gate 3</span></td><td class="mono num">1</td><td class="mono">[4]</td></tr>
+            <tr><td class="mono num">4</td><td class="mono">delta "X" (dup)</td><td><span class="chip chip--dropped">gate 3 &middot; inner</span></td><td class="mono num">1</td><td class="mono">[4]</td></tr>
+            <tr class="outcome-row"><td colspan="5" class="mono">applied 1 &middot; buffered 1 &middot; droppedRedundant 1 &mdash; buffer holds one copy</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- G -->
+    <!-- G -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE G</span><span class="trace-title">Recovery &mdash; the replay still had it</span></div>
+      <p class="trace-note">Trace E, continued. The client has been dropping events for thread T because it never saw the thread created. A <code>resync</code> arrives, the client fetches the snapshot, and the server then replays its buffer &mdash; which for a recent thread still contains every one of its events.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>input</th><th>kind</th><th>outcome</th><th class="mono">lastSeq</th><th class="mono">truncated</th><th class="mono">text</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">delta seq 3</td><td>event</td><td><span class="chip chip--dropped">gate 1 &middot; lossy</span></td><td class="mono">&mdash;</td><td class="mono">&mdash;</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono">snapshot</td><td><span class="chip chip--accent">resync</span></td><td><span class="chip chip--applied">shell built, awaiting resume</span></td><td class="mono num">0</td><td class="mono">true</td><td class="mono">""</td></tr>
+            <tr><td class="mono">thread.created seq 1</td><td>event</td><td><span class="chip chip--applied">resumed at the start</span></td><td class="mono num">1</td><td class="mono">false</td><td class="mono">&mdash;</td></tr>
+            <tr><td class="mono">delta seq 2 "Hel"</td><td>event</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">2</td><td class="mono">false</td><td class="mono">"Hel"</td></tr>
+            <tr><td class="mono">complete seq 3</td><td>event</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">3</td><td class="mono">false</td><td class="mono">"Hello"</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">resyncs 1 &middot; nothing lost &mdash; the truncation warning is withdrawn</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="trace-note" style="margin-top:14px"><strong>The shell is built at <code>lastSeq 0</code>, not at the snapshot&rsquo;s value.</strong> Seeking forward to the snapshot looks right &mdash; the server says the thread reached seq 3, so start there &mdash; and it silently destroys the transcript: every replayed event would then fail the already-applied gate and be discarded as redundant. The thread would render empty and claim its messages were unavailable, while its entire history sat in the replay it had just thrown away. That shipped once; this is the fix.</p>
+    </div>
+
+    <!-- H -->
+    <div class="trace">
+      <div class="trace-head"><span class="trace-id">TRACE H</span><span class="trace-title">Recovery &mdash; the replay started mid-thread</span></div>
+      <p class="trace-note">The same rebuild, but this thread is old enough that the buffer no longer holds its beginning. Nothing about the client changes; it simply learns something different from the first event it receives.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>input</th><th>kind</th><th>outcome</th><th class="mono">lastSeq</th><th class="mono">truncated</th><th class="mono">text</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">snapshot</td><td><span class="chip chip--accent">resync</span></td><td><span class="chip chip--applied">shell built, awaiting resume</span></td><td class="mono num">0</td><td class="mono">true</td><td class="mono">""</td></tr>
+            <tr><td class="mono">delta seq 19</td><td>event</td><td><span class="chip chip--buffered">resumed above the start</span></td><td class="mono num">19</td><td class="mono">true</td><td class="mono">"partial"</td></tr>
+            <tr><td class="mono">delta seq 20</td><td>event</td><td><span class="chip chip--applied">gate 4</span></td><td class="mono num">20</td><td class="mono">true</td><td class="mono">"partial text"</td></tr>
+            <tr class="outcome-row"><td colspan="6" class="mono">resyncs 1 &middot; a prefix is genuinely gone &mdash; the thread says so</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="trace-note" style="margin-top:14px">Arriving at seq 19 rather than seq 1 is the entire signal. The client does not need to be told what it missed, and cannot be told reliably &mdash; it reads the answer off the first event that reaches it. Both traces run identical code; only the stream differs.</p>
+    </div>
+  </section>
+
+
+
+  <!-- ============================= SUBTLETIES ============================= -->
+  <section>
+    <h2>Six things that read wrong at first</h2>
+    <p class="lede">Each of these looks like a bug until you see why it isn't. They're the likeliest places to be caught out if someone reads the file over your shoulder.</p>
+
+    <ol class="subtle">
+      <li><strong>An ignored status transition still advances <code>lastSeq</code>.</strong> <code>applyToThread</code> sets <code>lastSeq = event.seq</code> before the switch, so a <code>thread.status</code> whose transition is illegal changes nothing about the status but still consumes the sequence number. That's correct &mdash; the event <em>was</em> delivered. If it didn't advance, every event after it would look like a gap and the thread would stall.</li>
+
+      <li><strong><code>stats.buffered</code> is a cumulative counter, not the current depth.</strong> It counts how many times an event has ever been held. Draining doesn't decrement it. For current depth, read <code>thread.buffered.length</code>.</li>
+
+      <li><strong><code>thread.created</code> bypasses the sequence gates entirely.</strong> It's handled inside gate 1's branch, so its <code>seq</code> is never compared to anything. In practice the server always emits it as seq 1; the reducer doesn't depend on that, it just takes whatever seq the creation event carries as the starting point.</li>
+
+      <li><strong><code>timeline</code> is shared by reference until it changes.</strong> <code>applyToThread</code> starts with <code>timeline: thread.timeline</code> &mdash; the same array &mdash; and only replaces it with a new one when a genuinely new message or tool appears. Cheap, and still never mutated.</li>
+
+      <li><strong>The client ignores illegal status transitions; the server throws on them.</strong> Same table, opposite policies, on purpose. A browser has to survive a replayed or version-skewed stream. A server that sees one has a mis-classifying adapter and should fail loudly.</li>
+
+      <li><strong>Two threads both counting <code>seq</code> 1, 2, 3 is correct.</strong> <code>lastSeq</code> lives on the thread, not on the feed. Ordering is only ever defined within a thread &mdash; "thread A's token 3 came before thread B's token 2" isn't a fact worth having, and the connection-level <code>offset</code> handles resume separately.</li>
+    </ol>
+  </section>
+
+  <!-- ============================= DRILL ============================= -->
+  <section>
+    <h2>Trace these yourself</h2>
+    <p class="lede">Cover the traces above and work them out on paper. If you can do these cold, you can answer anything they ask about ordering.</p>
+
+    <ol class="subtle">
+      <li>Thread at <code>lastSeq 3</code>, buffer holds <code>[6, 5]</code>. Event seq 4 arrives. What is <code>lastSeq</code> afterwards, and how many times did <code>applied</code> increment?</li>
+      <li>Same thread, same buffer, but the arriving event is seq 7. Which gate, and what does the buffer look like after?</li>
+      <li>A <code>message.complete</code> for a <code>messageId</code> the client has never seen arrives at the right sequence. Does it render? What happens to <code>timeline</code>?</li>
+      <li>Two agents stream into one thread. Both send deltas at seq 8 and seq 9 with different <code>messageId</code>s. Why don't their words interleave?</li>
+      <li>You reconnect and the very first frame is a <code>tool.result</code> for a thread you don't know. Trace it, then say what the fix would be.</li>
+    </ol>
+
+    <div class="note">
+      <span class="note-label">Answers</span>
+      <p><strong>1.</strong> <code>lastSeq 6</code>; <code>applied</code> increments three times &mdash; seq 4 directly, then 5 and 6 drained. <strong>2.</strong> Gate 3; buffer becomes <code>[6, 5, 7]</code> in arrival order, and <code>lastSeq</code> stays 3. <strong>3.</strong> Yes &mdash; <code>message.complete</code> creates the message if it's absent and appends it to <code>timeline</code>, with <code>streaming: false</code>. <strong>4.</strong> <code>messages</code> is keyed by <code>messageId</code>, so each author accumulates into its own entry; a single shared accumulator is exactly the bug this design avoids. <strong>5.</strong> Gate 1 drops it, and every later event for that thread too; the fix is handling the server's <code>resync</code> frame in <code>useFeedStream</code>.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    One of five visual deep-dives in <code>docs/visual/</code>. The mechanism is
+    here; line references and the weak-point list live in the code review notes.
+    The source file is the authority &mdash; where this page and the code
+    disagree, the code is right and this page is stale.
+  </footer>
+
+</div>
+
+</body>
+</html>

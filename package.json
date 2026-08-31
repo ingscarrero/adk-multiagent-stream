@@ -1,0 +1,37 @@
+{
+  "name": "adk-agent-feed",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.6.5",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:server": "pnpm --filter @feed/server dev",
+    "dev:web": "pnpm --filter @feed/web dev",
+    "dev:recovery": "pnpm --parallel --filter \"./apps/*\" dev:recovery",
+    "build": "pnpm --filter @feed/web build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "eval": "pnpm --filter @feed/eval eval",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:e2e",
+    "postinstall": "playwright install --with-deps chromium || playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "26.4.0",
+    "eslint": "10.9.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.11.0",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11",
+    "@eslint/js": "10.0.1"
+  }
+}
