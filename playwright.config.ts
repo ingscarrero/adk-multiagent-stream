@@ -69,10 +69,25 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * Scripted streaming is slowed for the browser suite only.
+   *
+   * At the 25ms default a research thread is finished about a second after it
+   * starts, and the cancellation specs have to get from "the first message is
+   * visible" to "the Stop click landed" inside that window. A loaded CI runner
+   * does not, so Stop unmounts mid-click and Playwright reports a detached
+   * element thirty seconds later. Slowing the stream widens the window instead
+   * of papering over it with a retry.
+   *
+   * The cost is a couple of seconds across the whole suite; CI wall-clock here
+   * is dominated by installing browsers, not by streaming. Unit tests are
+   * unaffected -- they never start a server.
+   */
   webServer: [
     {
       command: 'pnpm --filter @feed/server start:test',
       port: 3001,
+      env: { SCRIPTED_CHUNK_DELAY_MS: '60' },
       reuseExistingServer: !CI,
       stdout: 'ignore',
       stderr: 'pipe',
@@ -88,6 +103,7 @@ export default defineConfig({
     {
       command: 'pnpm --filter @feed/server dev:recovery',
       port: 3002,
+      env: { SCRIPTED_CHUNK_DELAY_MS: '60' },
       reuseExistingServer: !CI,
       stdout: 'ignore',
       stderr: 'pipe',

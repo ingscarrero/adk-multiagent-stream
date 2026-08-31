@@ -98,17 +98,22 @@ export class FeedPage {
   /**
    * Clicks Stop.
    *
-   * Waits for the control to be present first: it is removed the instant a
-   * thread reaches a terminal status, so clicking a thread that has already
-   * finished otherwise fails as a detached-element timeout thirty seconds
-   * later, rather than as "this thread was already done".
+   * Both waits are bounded, and for the same reason: Stop is unmounted the
+   * instant a thread reaches a terminal status. A thread that finishes first
+   * should fail as "it was already done", not as a detached-element timeout
+   * that eats the whole 30s test budget and says nothing about the cause.
+   *
+   * The check and the click are separately bounded because they fail for
+   * different reasons -- the first means Stop never appeared, the second means
+   * it appeared and then went away mid-click. The second is the race that
+   * `SCRIPTED_CHUNK_DELAY_MS` in playwright.config.ts exists to widen.
    */
   async cancel(thread: Locator): Promise<void> {
     const stop = thread.getByTestId('cancel-thread');
     await expect(stop, 'thread finished before it could be cancelled').toBeVisible({
       timeout: 5_000,
     });
-    await stop.click();
+    await stop.click({ timeout: 5_000 });
   }
 
   /** Concatenated text of every message in a thread, in render order. */

@@ -198,6 +198,15 @@
       <p>A fixed sleep in a streaming test is a race that has not failed yet. It passes on the machine it was written on and fails on CI, where everything is slower and nothing is your fault. The fix is never a longer sleep.</p>
     </div>
 
+
+    <div class="note warn">
+      <span class="note-label">What zero sleeps does not buy you</span>
+      <p>Removing fixed sleeps removes one class of race. It does not remove the class where the <em>application</em> finishes before the test can act on it &mdash; and that one hides until a loaded CI runner finds it.</p>
+      <p>Both cancellation specs did exactly this. A scripted research thread runs to completion in about a second at the default 25ms chunk delay, and the specs have to get from <em>"the first message is visible"</em> to <em>"the Stop click landed"</em> inside that window. Locally they always did. On a loaded runner they did not, so <code>Stop</code> unmounted mid-click and Playwright reported a detached element thirty seconds later &mdash; a timeout that says nothing about the cause.</p>
+      <p>The fix widens the window rather than retrying into it: <code>SCRIPTED_CHUNK_DELAY_MS: '60'</code> on the Playwright web servers only. Unit tests never start a server, and CI wall-clock here is dominated by installing browsers, not by streaming. The click is now separately bounded at 5s so the two failures read differently &mdash; <em>Stop never appeared</em> against <em>Stop appeared and went away mid-click</em>.</p>
+      <p>Verified by driving it the wrong way: at a 1ms delay the specs fail on demand, which is what makes the 60ms a fix rather than a hope.</p>
+    </div>
+
     <div class="card ok">
       <div class="card-head"><span class="card-num">RULE 2</span><span class="card-name">No spec ever touches a selector</span></div>
       <p>Specs speak in <em>"the thread whose prompt is X"</em> and <em>"its status"</em>. <code>e2e/pages/FeedPage.ts</code> owns every mapping from that vocabulary to a <code>data-testid</code>.</p>
