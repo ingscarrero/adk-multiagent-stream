@@ -2,41 +2,60 @@
 
 ## The shape
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  apps/web            React 19 + Vite                    │
-│                                                         │
-│   App ── useFeedStream ── EventSource ──┐               │
-│            │                            │               │
-│            └── feedReducer (pure)       │               │
-│                  ordering, dedup, gaps  │               │
-└─────────────────────────────────────────┼───────────────┘
-                                          │ SSE (one connection)
-┌─────────────────────────────────────────┼───────────────┐
-│  apps/server         Express 5          ▼               │
-│                                                         │
-│   routes ── ThreadRunner ── SessionHub ──► subscribers  │
-│                  │          (seq)   │                   │
-│                  ▼                  ▼                   │
-│         AdkEventTranslator      EventStream             │
-│         ◄── the only ADK seam   ◄── the log, behind a   │
-│                                     port (append/open)  │
-└──────────────────┬──────────────────────────────────────┘
-                   │ ADK Event stream
-┌──────────────────▼──────────────────────────────────────┐
-│  packages/agents     @google/adk 2.0.0                  │
-│                                                         │
-│   router: LlmAgent ──transfer──► order_agent, kb_agent  │
-│   research: Sequential(Parallel(a, b), synthesizer)     │
-│   model: ScriptedLlm (default) | Gemini                 │
-└─────────────────────────────────────────────────────────┘
+A C4-style container view. Solid arrows are calls; the dashed arrow is the one
+long-lived SSE connection. The illustrated version, with the same boundaries
+drawn and annotated, is [visual/architecture.html](visual/architecture.html).
 
-  packages/protocol   zod schemas + status machine, shared by all of the above
-  packages/providers  ports + adapters for everything this app does not implement
-                      itself: sessions, knowledge, identity, eventStream
-                      (docs/PROVIDERS.md)
-  packages/eval       ADK-style agent evaluation (Python-only in ADK itself)
+```mermaid
+flowchart TB
+  subgraph browser["Browser — apps/web (React 19 + Vite, no ADK)"]
+    App["App / ThreadCard / Composer"]
+    Hook["useFeedStream<br/>EventSource + resync"]
+    Reducer["feedReducer (pure)<br/>ordering · dedup · gaps"]
+    App --> Hook --> Reducer
+  end
+
+  subgraph server["Server — apps/server (Express 5)"]
+    Routes["routes<br/>/api/threads · /messages · /respond · /cancel · /health"]
+    Runner["ThreadRunner<br/>seq per thread · terminal guarantee"]
+    Adapter["AdkEventTranslator<br/>the only ADK → wire seam"]
+    Hub["SessionHub<br/>offset per session · replay · backpressure"]
+    Routes --> Runner --> Adapter
+    Runner --> Hub
+  end
+
+  subgraph agents["Agent runtime — packages/agents (@google/adk 2.0.0)"]
+    Router["router: LlmAgent<br/>transfer → order_agent · kb_agent"]
+    Research["research: Sequential(Parallel(a, b), synthesizer)"]
+    Model["model: ScriptedLlm (default) | Gemini"]
+    Tools["tools: lookupOrder · checkShippingStatus<br/>searchKnowledgeBase · requestRefund (gated)"]
+  end
+
+  subgraph shared["Shared"]
+    Protocol["packages/protocol<br/>zod schemas · status machine"]
+    Providers["packages/providers<br/>ports: sessions · knowledge · identity · eventStream"]
+    Eval["packages/eval<br/>ADK-style evals (TS)"]
+  end
+
+  Hook -- "POST (start · follow-up · respond · cancel)" --> Routes
+  Routes -. "GET /api/stream — one SSE connection, every thread" .-> Hook
+  Runner -- "runner.runAsync(session, newMessage)" --> Router
+  Runner --> Research
+  Router --> Tools
+  Research --> Tools
+  Hub --> Providers
+  Runner --> Providers
+  Eval --> Router
+
+  Reducer -.- Protocol
+  Adapter -.- Protocol
 ```
+
+| | |
+|---|---|
+| `packages/protocol` | zod schemas + status machine, shared by all of the above |
+| `packages/providers` | ports + adapters for everything this app does not implement itself: sessions, knowledge, identity, eventStream ([PROVIDERS.md](PROVIDERS.md)) |
+| `packages/eval` | ADK-style agent evaluation (Python-only in ADK itself) |
 
 ## The two rules that shape everything
 

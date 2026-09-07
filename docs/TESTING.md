@@ -27,14 +27,15 @@ on the critical path of CI.
 
 | Layer | Runner | Count | What it proves |
 |---|---|---|---|
-| Protocol, reducer & components | Vitest (node/jsdom) | 111 | Ordering rules, status machine, wire schemas, the stream hook, follow-up and approval state |
+| Protocol, reducer, components & hooks | Vitest (node/jsdom) | 157 | Ordering rules, status machine, wire schemas, the stream hook, sticky scroll, every feed component's rendering rules, follow-up and approval state |
 | Server | Vitest (node) | 63 | Adapter mapping, real HTTP/SSE, concurrency, reconnect, cancellation, the two memory bounds, follow-up turns and the confirmation gate |
 | Providers | Vitest (node) | 39 | Config validation, plus contract suites for the knowledge and event-stream ports |
 | Evals | Vitest (node) | 25 | Retrieval metrics and the agent regression gate |
+| Agents: model and tools | Vitest (node) | 24 | Model-mode resolution, tool fixtures and schemas, and the refund confirmation gate driven through ADK's own `FunctionTool.runAsync` |
 | ADK integration | Vitest (node) | 28 | Agents actually run under a real `Runner`, with transfer and parallel fan-out |
 | Browser | Playwright | 81 | The whole stack, in two engines plus a small-buffer recovery project |
 
-259 in `pnpm test`, 81 in `pnpm test:e2e`, and 7 eval cases that run both as a
+332 in `pnpm test`, 81 in `pnpm test:e2e`, and 7 eval cases that run both as a
 CLI and inside the unit suite.
 
 ### Contract tests
@@ -177,6 +178,42 @@ that; the trajectory is the behaviour.
 
 The same evalset runs inside `pnpm test`, so a prompt or graph change cannot
 land without the behavioural expectations being rechecked.
+
+## Coverage
+
+```bash
+pnpm test:coverage      # text summary, plus html/lcov/json in coverage/
+```
+
+Measured over **every** source file in `apps/*/src` and `packages/*/src`, not
+only the ones a test happens to import, so an untested module shows as 0%
+rather than disappearing from the report. Three process entrypoints are
+excluded because they wire a listener, a DOM root and `process.argv` and are
+exercised by `pnpm dev`, `pnpm build` and `pnpm eval` instead:
+`apps/server/src/index.ts`, `apps/web/src/main.tsx`,
+`packages/eval/src/cli.ts`.
+
+| | Measured (2026-09-07) | Floor enforced in CI |
+|---|---|---|
+| Lines | 90.79% | **87%** |
+| Branches | 81.85% | **78%** |
+| Functions | 88.84% | — |
+| Statements | 90.36% | — |
+
+The floors sit three points under the measurement so that a regression fails
+CI while an ordinary refactor does not; raise them when coverage rises. CI
+uploads the report as the `coverage-report` artifact. The README badge is a
+static shields.io badge carrying the measured figure — there is no coverage
+service wired, so update it when the number moves.
+
+Where the remaining gap is, and why it is there:
+
+- `packages/eval/src/runner.ts` (~59% lines) — the failure-reporting branches
+  run only when a case fails, and the bundled evalset passes.
+- `apps/web/src/feed/useFeedStream.ts` (~69%) — the reconnect timers and the
+  `CLOSED` re-create path are covered in Playwright (Firefox), not in jsdom.
+- `apps/web/src/App.tsx` (~70%) — the thread-rendering branch needs a stream
+  event, which the browser suite provides.
 
 ## What is not tested
 

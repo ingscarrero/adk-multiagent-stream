@@ -21,6 +21,59 @@ browser ──GET /api/stream?sessionId=S──► server
         ◄──── thread A seq 3 ─────────
 ```
 
+### One thread, end to end
+
+The same exchange as a sequence. Two things to notice: the `202` carries no
+result, because the result arrives on the stream; and `seq` is assigned in one
+place, by the runner, after translation.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant R as Browser reducer
+  participant H as useFeedStream
+  participant API as Express routes
+  participant TR as ThreadRunner
+  participant AD as AdkEventTranslator
+  participant ADK as ADK Runner + agents
+  participant Hub as SessionHub / EventStream
+
+  H->>API: GET /api/stream?sessionId=S (Last-Event-ID?)
+  API->>Hub: subscribe(res, lastEventId)
+  Hub-->>H: retry: 1000  ": connected"  (priming frame)
+  Hub-->>H: replay every retained event after the offset
+  Note over H,Hub: resume point older than the log → event: resync {from}<br/>client fetches GET /api/threads, reconnects at from − 1
+
+  H->>API: POST /api/threads {prompt, agent}
+  API->>TR: start(thread A)
+  API-->>H: 202 {threadId, sessionId}
+  TR->>Hub: publish thread.created (seq 1), thread.status running (seq 2)
+  Hub-->>H: id: offset · data: {threadId A, seq, type}
+  H->>R: dispatch(event)
+
+  TR->>ADK: runner.runAsync(session, newMessage, StreamingMode.SSE)
+  loop every ADK Event: partial text · functionCall · functionResponse · transfer · error
+    ADK-->>TR: Event
+    TR->>AD: translate(event, threadState)
+    AD-->>TR: FeedEvent[] — message.delta · tool.call · tool.result · thread.status …
+    TR->>Hub: publish(threadId, events)  seq++ per thread, offset++ per session
+    Hub-->>H: SSE frame
+    H->>R: dispatch
+    R->>R: already applied? drop · gap? buffer · else apply and drain
+  end
+  Note over R,Hub: thread B, started meanwhile, interleaves on the same connection<br/>with its own seq 1, 2, 3 … and shares the session offset
+
+  TR->>Hub: message.complete, thread.status complete — in `finally`, always
+  Hub-->>H: SSE frame
+  H->>R: dispatch → thread A terminal
+
+  opt later
+    H->>API: POST /api/threads/A/messages · /respond · /cancel
+    API-->>H: 202 accepted · 409 state refuses · 404 no such thread
+    Note over TR: the effect arrives on the stream, correlated by threadId
+  end
+```
+
 ### Why multiplexed, and what it costs you
 
 | | Multiplexed SSE (chosen) | One SSE per thread | WebSocket |
@@ -120,34 +173,50 @@ has to be a single session-wide sequence. One counter cannot do both jobs.
 
 ## 4. Thread status
 
+```mermaid
+stateDiagram-v2
+  direction TB
+  [*] --> queued
+
+  state "active — a turn in progress" as active {
+    queued --> running
+    running --> streaming
+    running --> awaiting_tool
+    running --> awaiting_input
+    streaming --> running
+    streaming --> awaiting_tool
+    streaming --> awaiting_input
+    awaiting_tool --> running
+    awaiting_tool --> streaming
+    awaiting_tool --> awaiting_tool
+    awaiting_tool --> awaiting_input
+    awaiting_input --> running
+    awaiting_input --> streaming
+  }
+
+  running --> complete
+  streaming --> complete
+  awaiting_tool --> complete
+  active --> cancelled
+  active --> error
+
+  complete --> running : follow-up message
+  cancelled --> running : follow-up message
+
+  complete --> [*]
+  cancelled --> [*]
+  error --> [*] : never continued
+
+  note right of awaiting_input
+    The one non-terminal state a turn
+    may end in. Always paired with a
+    thread.input_required event.
+  end note
 ```
-                    ┌──────────┐
-                    │  queued  │
-                    └────┬─────┘
-                         ▼
-                    ┌──────────┐
-       ┌───────────►│ running  │◄──────────┐
-       │            └────┬─────┘           │
-       │                 ▼                 │
-       │            ┌───────────┐          │
-       │      ┌────►│ streaming │          │
-       │      │     └────┬──────┘          │
-       │      │          ▼                 │
-       │      │   ┌───────────────┐        │
-       │      └───┤ awaiting_tool ├────────┘
-       │          └───────────────┘
-       │          ┌────────────────┐
-       └──────────┤ awaiting_input │
-                  └────────────────┘
 
-  any non-terminal ──► complete | error | cancelled   (ends the turn)
-
-  complete ──┐
-             ├──► running        a follow-up re-opens the conversation
-  cancelled ─┘
-
-  error ─────► (nothing)         a failed run is not continued
-```
+Every state inside the box may go to `cancelled` or `error`; `complete` is
+reachable from any active state that has done work, which excludes `queued`
+and `awaiting_input`.
 
 The table lives in [`packages/protocol/src/status.ts`](../packages/protocol/src/status.ts)
 and every one of the 64 status pairs is asserted in `status.test.ts`.

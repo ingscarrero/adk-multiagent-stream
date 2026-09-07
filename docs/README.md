@@ -9,6 +9,23 @@
 | **[TESTING.md](TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[LIMITATIONS.md](LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
 | **[PROVIDERS.md](PROVIDERS.md)** | What is emulated versus what a real provider would serve, and where each seam is. |
+| **[REQUIREMENTS.md](REQUIREMENTS.md)** | Numbered functional requirements traced to endpoints, modules and tests; non-functional requirements for performance, reliability, observability, security, cost and accessibility. |
+| **[SYSTEM_DESIGN.md](SYSTEM_DESIGN.md)** | Goals, constraints, alternatives rejected, failure modes, the scaling path (message store, Redis stream, identity, N instances), and the cost envelope. |
+| **[adr/](adr/README.md)** | Six architecture decision records: the multiplexed connection, the two counters, the scripted model, the ADK boundary, the provider ports, and the log-versus-store distinction. |
+
+Contributor-facing files live at the repo root: [CONTRIBUTING.md](../CONTRIBUTING.md),
+[SECURITY.md](../SECURITY.md), [CHANGELOG.md](../CHANGELOG.md).
+
+## Diagrams
+
+Mechanism diagrams that GitHub renders inline are Mermaid, in the Markdown
+next to the prose they explain: the container view in
+[ARCHITECTURE.md](ARCHITECTURE.md#the-shape), the end-to-end sequence and the
+status machine in [STREAMING-CONTRACT.md](STREAMING-CONTRACT.md), and the
+scaling path in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md#scaling-path). The
+hand-drawn SVG deep-dives below go further than Mermaid can; open them from
+the filesystem or a raw-file link, because GitHub does not render HTML pages
+in the tree view.
 
 ## Visual deep-dives
 
@@ -40,8 +57,11 @@ Every page links to the other nine, so the set reads in any order.
 
 **Where a thing goes.** Prose that a reader follows top to bottom is Markdown in
 `docs/`. A mechanism whose shape is the explanation — a state machine, a flow
-through gates, a sequence evolving over time — earns a page in `docs/visual/`.
-If a sentence says it faster, write the sentence.
+through gates, a sequence evolving over time — gets a Mermaid diagram beside
+the prose if Mermaid can draw it, and a page in `docs/visual/` if it cannot.
+If a sentence says it faster, write the sentence. Decisions with lasting
+consequences get an ADR in `docs/adr/`; requirements and the design above the
+code level live in `REQUIREMENTS.md` and `SYSTEM_DESIGN.md`.
 
 **One claim, one home.** A document describes only behaviour that is implemented
 and tested. Anything partial, planned, or cut is recorded in

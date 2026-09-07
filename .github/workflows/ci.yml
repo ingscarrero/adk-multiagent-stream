@@ -46,9 +46,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-      - run: pnpm test
+      # Enforces the line/branch floors in vitest.config.ts, so a change that
+      # drops coverage fails here rather than going unnoticed. A dedicated
+      # script rather than a forwarded flag: `pnpm test -- --coverage` hands
+      # the literal `--` to vitest, which then ignores `--coverage` entirely.
+      - run: pnpm test:coverage
       # Evals gate agent behaviour the way unit tests gate code.
       - run: pnpm eval
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
 
   e2e:
     name: Playwright (${{ matrix.project }})
