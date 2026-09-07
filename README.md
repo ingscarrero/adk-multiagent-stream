@@ -1,5 +1,11 @@
 # adk-agent-feed
 
+[![CI](https://github.com/ingscarrero/adk-multiagent-stream/actions/workflows/ci.yml/badge.svg)](https://github.com/ingscarrero/adk-multiagent-stream/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/badge/coverage-90.8%25_lines_%C2%B7_81.9%25_branches-brightgreen)](docs/TESTING.md#coverage)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![node ≥ 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933?logo=node.js&logoColor=white)](.nvmrc)
+[![pnpm 10](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)](package.json)
+
 A real-time message feed for **multiple concurrent AI agent threads**, built on
 [Google's Agent Development Kit for JS](https://github.com/google/adk-js)
 (`@google/adk` v2.0.0), React 19, and Playwright.
@@ -47,7 +53,7 @@ Send a prompt, then send another before the first finishes. Both stream.
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 259 Vitest tests — protocol, reducer, adapter, HTTP/SSE, providers, evals |
+| `pnpm test` | 332 Vitest tests — protocol, reducer, components, adapter, HTTP/SSE, providers, tools, evals. Add `--coverage` for the report and the floors |
 | `pnpm test:e2e` | 81 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
@@ -78,6 +84,9 @@ Index and conventions in **[docs/](docs/README.md)**.
 | **[docs/TESTING.md](docs/TESTING.md)** | The four test layers, why the suite isn't flaky, and what isn't covered. |
 | **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)** | Every known gap and follow-up, with cause, blast radius, and fix. |
 | **[docs/PROVIDERS.md](docs/PROVIDERS.md)** | Emulated versus real: what stands in for Kafka, a vector DB, a session store, an identity provider — and where each seam is. |
+| **[docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)** | Functional requirements traced to endpoints and tests; non-functional requirements including security, cost and accessibility. |
+| **[docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md)** | Goals, constraints, rejected alternatives, failure modes, the scaling path, and the cost envelope. |
+| **[docs/adr/](docs/adr/README.md)** | Six architecture decision records. |
 | **[docs/visual/](docs/visual/overview.html)** | Ten illustrated deep-dives, starting with **[Prompt to Pixel](docs/visual/overview.html)** — the whole solution on one page. Then the substrate boundary, the event log, the reducer's gates, the ADK adapter, the SSE hub, the thread runner, the deterministic model, the agent evals, and the browser suite. |
 
 Every source file opens with a docblock explaining what it owns and why it is
@@ -258,6 +267,12 @@ Every one of these is recorded with its cause, blast radius, and fix in
 
 Node 22+ (developed on 26), pnpm 10+.
 
+## Contributing and security
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the gate and where a change goes;
+[SECURITY.md](SECURITY.md) states the security boundary and how to report a
+problem privately; [CHANGELOG.md](CHANGELOG.md) records what landed when.
+
 ## License
 
-Apache-2.0, matching `@google/adk`.
+[MIT](LICENSE). `@google/adk` is Apache-2.0 and is consumed as a dependency.
