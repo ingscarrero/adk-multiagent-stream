@@ -182,7 +182,7 @@ land without the behavioural expectations being rechecked.
 ## Coverage
 
 ```bash
-pnpm test -- --coverage      # text summary, plus html/lcov/json in coverage/
+pnpm test:coverage      # text summary, plus html/lcov/json in coverage/
 ```
 
 Measured over **every** source file in `apps/*/src` and `packages/*/src`, not

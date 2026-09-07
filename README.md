@@ -53,7 +53,8 @@ Send a prompt, then send another before the first finishes. Both stream.
 | `pnpm dev` | Server on `:3001`, Vite on `:5173` (proxying `/api`) |
 | `pnpm dev:demo` | The same pair, paced so a human can watch. Scripted threads finish in ~0.5s at the default, which makes **Stop** appear and vanish before you can click it ([L17](docs/LIMITATIONS.md#l17)); this slows streaming and tool latency so cancellation, tool steps and partial text are all observable |
 | `pnpm dev:recovery` | The same pair on `:3002`/`:5174` with a 40-event replay buffer, so buffer overrun and resync are reachable by hand. Open `/?debug` for the counters |
-| `pnpm test` | 332 Vitest tests — protocol, reducer, components, adapter, HTTP/SSE, providers, tools, evals. Add `--coverage` for the report and the floors |
+| `pnpm test` | 332 Vitest tests — protocol, reducer, components, adapter, HTTP/SSE, providers, tools, evals |
+| `pnpm test:coverage` | The same suite with the coverage report and the line/branch floors CI enforces |
 | `pnpm test:e2e` | 81 Playwright tests — Chromium, Firefox, and a small-buffer recovery project |
 | `pnpm eval` | Agent behavioural evals, ADK-style |
 | `pnpm typecheck` | `tsc --noEmit` per package |
