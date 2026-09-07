@@ -29,7 +29,7 @@ pnpm test:e2e    # playwright: chromium, firefox, recovery
 ```
 
 `pnpm check` runs all of it. Coverage floors are enforced by
-`pnpm test --coverage` (see `vitest.config.ts`); a change that drops
+`pnpm test -- --coverage` (see `vitest.config.ts`); a change that drops
 coverage below a floor fails CI.
 
 ## Where a change goes
