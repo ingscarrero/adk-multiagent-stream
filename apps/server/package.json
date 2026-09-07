@@ -2,6 +2,7 @@
   "name": "@feed/server",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "cross-env PORT=3001 tsx watch src/index.ts",
