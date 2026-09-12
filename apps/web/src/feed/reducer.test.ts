@@ -544,4 +544,86 @@ describe('resync recovery (L1)', () => {
     const state = feedReducer(initialFeedState, resyncAction([summary()]));
     expect(state.stats.resyncs).toBe(1);
   });
+
+  it('hydrates from queued, so an errored thread does not resurrect an answered request', () => {
+    // Started at the summary's *final* status, every historical transition in
+    // the transcript is illegal and dropped -- but `thread.input_required` is
+    // not a transition and still applies, so a thread that paused for an
+    // approval before failing came back offering that decision again.
+    const transcript: FeedEvent[] = [
+      created(),
+      status(2, 'running'),
+      complete(3, 'I can refund order A-1001. Approve?'),
+      inputRequired(4, 'req-1'),
+      status(5, 'awaiting_input'),
+      status(6, 'running'),
+      { type: 'thread.error', ...at(7), message: 'refund service unavailable' },
+      status(8, 'error'),
+    ];
+    const state = feedReducer(
+      initialFeedState,
+      resyncAction([summary({ status: 'error', lastSeq: 8, transcript })]),
+    );
+
+    expect(thread(state).status).toBe('error');
+    expect(thread(state).inputRequest).toBeUndefined();
+    expect(thread(state).error).toEqual({ message: 'refund service unavailable' });
+    expect(thread(state).historyTruncated).toBe(false);
+  });
+
+  it('keeps a pending request when the thread is still paused on it', () => {
+    const transcript: FeedEvent[] = [
+      created(),
+      status(2, 'running'),
+      inputRequired(3, 'req-1'),
+      status(4, 'awaiting_input'),
+    ];
+    const state = feedReducer(
+      initialFeedState,
+      resyncAction([summary({ status: 'awaiting_input', lastSeq: 4, transcript })]),
+    );
+
+    expect(thread(state).status).toBe('awaiting_input');
+    expect(thread(state).inputRequest?.requestId).toBe('req-1');
+  });
+
+  it('never moves a live thread\'s lastSeq backwards when merging a transcript', () => {
+    // Deltas are not stored, so the transcript ends at the last *settled*
+    // event while the client may already be past it. Adopting the store's end
+    // as the watermark would let the replay re-apply those deltas, doubling
+    // the partial text until a later complete event happened to replace it.
+    let state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      status(3, 'streaming'),
+      delta(4, 'Hel'),
+      delta(5, 'lo'),
+      complete(6, 'Hello'),
+      delta(7, 'Wor', 'm2'),
+      delta(8, 'ld', 'm2'),
+    ]);
+    expect(thread(state).lastSeq).toBe(8);
+
+    // What the store holds: the settled events only, ending two seqs early.
+    const transcript: FeedEvent[] = [
+      created(),
+      status(2, 'running'),
+      status(3, 'streaming'),
+      complete(6, 'Hello'),
+    ];
+    state = feedReducer(
+      state,
+      resyncAction([summary({ status: 'streaming', lastSeq: 8, transcript })]),
+    );
+    expect(thread(state).lastSeq).toBe(8);
+
+    // The replay that follows re-delivers the deltas the store never held.
+    state = reduceAll(state, [delta(7, 'Wor', 'm2'), delta(8, 'ld', 'm2'), delta(9, '!', 'm2')]);
+
+    expect(messageText(state, 'm2')).toBe('World!');
+    expect(messageText(state, 'm1')).toBe('Hello');
+    expect(thread(state).lastSeq).toBe(9);
+    expect(state.stats.droppedRedundant).toBe(2);
+    expect(thread(state).historyTruncated).toBe(false);
+  });
 });

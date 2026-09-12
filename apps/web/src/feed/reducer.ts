@@ -400,7 +400,7 @@ function applyResync(state: FeedState, summaries: ThreadSummary[]): FeedState {
       id: summary.id,
       prompt: summary.prompt,
       agent: summary.agent,
-      status: summary.status,
+      status: 'queued',
       timeline: [],
       messages: {},
       tools: {},
@@ -421,17 +421,33 @@ function applyResync(state: FeedState, summaries: ThreadSummary[]): FeedState {
     // gate 3 would read those holes as loss and buffer the whole thing against
     // predecessors that are never coming. The gates police a *transport*; a
     // store is not one.
-    const hydrated = summary.transcript.reduce(applyToThread, shell);
+    //
+    // Replayed from `queued`, never from the summary's current status. The
+    // transcript is the thread's whole history, so its status transitions are
+    // only legal when walked from the start. Started at the final status
+    // instead, every historical transition is rejected as illegal -- but
+    // `thread.input_required` still applies, and a thread that paused for an
+    // approval before ending in `error` would come back offering that stale
+    // decision again. The summary's status is applied last, below.
+    const hydrated = summary.transcript.reduce(applyToThread, { ...shell, status: 'queued' });
 
     const restoredFromStore = summary.transcript.length > 0;
+    // A request can only be pending while the thread is paused on it. Any
+    // other final status means it was answered, or the run ended without it.
+    const { inputRequest, ...rest } = hydrated;
     threads[summary.id] = {
-      ...hydrated,
+      ...rest,
+      ...(summary.status === 'awaiting_input' && inputRequest ? { inputRequest } : {}),
       status: summary.status,
       // The store answered, so nothing is missing. History is only genuinely
       // gone when the thread has no content from either source -- which with
       // the memory adapter is exactly what a restart looks like.
       historyTruncated: hydrated.timeline.length === 0 && summary.lastSeq > 0,
-      lastSeq: summary.transcript.at(-1)?.seq ?? shell.lastSeq,
+      // The high-water mark never moves backwards. A live thread may already be
+      // past the transcript's end -- deltas are not stored, so the store's last
+      // seq is the last *settled* event, not the last one the client applied.
+      // Lowering it would let the replay that follows re-append those deltas.
+      lastSeq: Math.max(shell.lastSeq, summary.transcript.at(-1)?.seq ?? 0),
       awaitingResume: true,
       restoredFromStore,
     };
