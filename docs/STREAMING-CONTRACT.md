@@ -416,8 +416,13 @@ messages instead of metadata, and truncation stops being user-visible.
 passed into `runner.runAsync`. ADK stops the run; the `finally` block emits
 `cancelled` and closes any open message.
 
+Like `/messages` and `/respond`, the request must carry the session
+(`x-session-id`, or `sessionId` in the query); without one it is `400`.
+
 Returns `202` if the abort was delivered, `409` if the thread had already
-finished, `404` if it never existed.
+finished, `404` if it never existed *or belongs to another session* — the same
+answer on purpose, so a caller cannot use cancel to probe which thread ids
+exist.
 
 ---
 

@@ -34,7 +34,7 @@ export default tseslint.config(
           // Root config files (vitest, playwright, eslint itself) belong to no
           // package tsconfig. Without this they fail to parse and the lint run
           // reports errors that have nothing to do with the code.
-          allowDefaultProject: ['*.js', '*.ts'],
+          allowDefaultProject: ['*.js', '*.ts', 'scripts/*.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

@@ -9,3 +9,11 @@ onlyBuiltDependencies:
   - esbuild
   - '@google/genai'
   - protobufjs
+
+# Transitive dependencies of @google/adk with published advisories, lifted to
+# the patched line. Each resolves to a version already in the lockfile or the
+# next patch release; drop an entry once @google/adk requires it itself.
+overrides:
+  adm-zip: '>=0.6.1'                      # GHSA-xcpc-8h2w-3j85, GHSA-vwc7-r8mq-g2x9
+  'uuid@<11.1.1': '>=11.1.1'              # GHSA-w5hq-g745-h8pq (v3/v5/v6 buffer bounds)
+  '@opentelemetry/core@<2.8.0': '>=2.8.0' # GHSA-8988-4f7v-96qf (W3C baggage allocation)

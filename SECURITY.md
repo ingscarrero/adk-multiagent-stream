@@ -21,7 +21,7 @@ need to add, are set out in
 | Control | Where |
 |---|---|
 | Request bodies validated with zod before use; `64kb` JSON limit | `apps/server/src/app.ts` |
-| A thread can only be continued or answered from the session that created it; a mismatch is `404`, not `403`, to avoid confirming the id exists | `app.ts` |
+| A thread can only be continued, answered or cancelled from the session that created it; a mismatch is `404`, not `403`, to avoid confirming the id exists | `app.ts` |
 | Approval must quote the pending `requestId`; a stale approval is refused (`409`) and ADK fails closed on its side | `app.ts`, `thread-runner.ts` |
 | Per-subscriber write ceiling (`SSE_MAX_BUFFERED_BYTES`) and idle-session sweep bound what a client can cost the server | `apps/server/src/sse.ts` |
 | `maxLlmCalls: 20` per run caps a runaway agent loop | `thread-runner.ts` |
