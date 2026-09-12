@@ -105,13 +105,14 @@ prefix is gone. The client stops guessing what it missed and finds out.
 `lastSeq` survives only as the hint that a rebuilt thread has history worth
 warning about, until the replay settles the question.
 
-**What is still lost.** Events live only in the bounded replay buffer, so a
-rolled-out transcript is genuinely unrecoverable. A restored thread carries
-`historyTruncated`, and the UI distinguishes the two cases: *"Earlier messages in
-this thread were lost while reconnecting"* when some survived, and *"Messages for
-this thread are no longer available"* when none did &mdash; the first phrasing is
-misleading on a thread with nothing in it. Restoring transcripts would mean
-persisting events, which is [L7](#l7).
+**What was still lost, until the store.** Events used to live only in the
+bounded replay buffer, so a rolled-out transcript was unrecoverable and every
+restored thread carried `historyTruncated`. The snapshot now returns the settled
+transcript from the message store ([L7](#l7)), and the notice is reserved for
+history that is genuinely missing. The UI still distinguishes the two cases:
+*"Earlier messages in this thread were lost while reconnecting"* when some
+survived, and *"Messages for this thread are no longer available"* when none
+did &mdash; the first phrasing is misleading on a thread with nothing in it.
 
 **The notice's `from` field is a resume point, not decoration.** After handling a
 `resync` the client reconnects at `from - 1`. Reconnecting with *no* resume point
@@ -322,30 +323,40 @@ transport artefact worth nothing once the message it built has closed. That is
 roughly five writes per turn instead of twenty-three.
 
 `GET /api/threads` returns each thread's transcript alongside its identity, so
-recovery hands back the conversation rather than an apology, and the client
-replays those events through the same reducer path live ones take. Retention
-is now the *stream's* property and not the transcript's, which is what
-[L16](#l16) was about — and it is closed.
+recovery hands back the conversation rather than an apology. The client applies
+that transcript *directly* — not through the reducer's ordering gates, which
+police a transport and would read the store's deliberate gaps (the deltas it
+never keeps) as loss — and idempotently by `seq`, so a thread already on screen
+does not double; the gated live replay then lands on top. Retention is now the
+*stream's* property and not the transcript's, which is what [L16](#l16) was
+about — and it is closed.
 
-**What is still true of this entry.** The adapter is `memory`. Sessions,
-threads, the event log and now the transcript all still vanish on restart.
-Every one has a port; none has a real adapter. `PROVIDER_MESSAGESTORE=postgres`
-is catalogued and fails at startup with *"not implemented yet"*, which is the
-next thing to build and the reason this stays open rather than being struck
-through.
+An event is stored before it is published, and its `seq` is committed only once
+both have happened. A store that refuses a write therefore leaves no gap: the
+turn is wound down tolerant of the store, closed with a `store_write_failed`
+error, and the registry reports it as `error` rather than a thread stuck in
+`queued` ([STREAMING-CONTRACT.md §5c](STREAMING-CONTRACT.md#5c-sequencing-when-the-store-refuses-a-write)).
+The snapshot is bounded per thread by `SNAPSHOT_TRANSCRIPT_LIMIT` (default
+1000 settled events) and flags a capped transcript as `transcriptTruncated`;
+the store itself is unbounded, deliberately.
 
-**Nothing survives a restart.** Sessions, thread records and the event log all
-live in process. Each now has a port — `PROVIDER_SESSIONS` selects the session
-store and `ThreadRunner` takes a `BaseSessionService` rather than constructing
-one; `PROVIDER_EVENTSTREAM` selects the log — so each real adapter is a config
-change rather than a refactor ([PROVIDERS.md](PROVIDERS.md)). None of the real
-adapters is written yet. The thread registry is the one store with no seam at
-all.
+**What is still true of this entry, precisely.** Nothing survives a restart,
+and it is two different gaps:
 
-**Nothing survives a restart.** Sessions, thread records, the event log and the
-transcript all live in process. Each has a port, so each real adapter is a
-config change rather than a refactor; none of those adapters is written. The
-thread registry is the one store with no seam at all.
+- **Sessions, the event log and the transcript** each have a port
+  (`PROVIDER_SESSIONS`, `PROVIDER_EVENTSTREAM`, `PROVIDER_MESSAGESTORE`), so
+  for each of them the durable adapter is a config change rather than a
+  refactor ([PROVIDERS.md](PROVIDERS.md)). None of those adapters is written.
+  `PROVIDER_MESSAGESTORE=postgres` is catalogued and fails at startup with
+  *"not implemented yet"*.
+- **The thread registry has no port.** `ThreadRunner` keeps thread ids,
+  statuses and sequence counters in a private in-process map, and
+  `restore()` discovers a session's threads through it. A durable message
+  store therefore keeps every transcript across a restart and cannot return
+  any of them: there is nobody left to ask. Restart recovery is *not* "swap
+  the message-store adapter"; it also needs a session-scoped thread listing —
+  a `ThreadStore` port, or a store-side index by session — which is the
+  explicit remaining seam and is deliberately not opened yet.
 
 <a id="l8"></a>
 ### L8 — Single instance only

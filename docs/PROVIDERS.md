@@ -28,7 +28,7 @@ named as such.
 | | |
 |---|---|
 | **Ports built** | `sessions`, `knowledge`, `identity`, `eventStream`, `messageStore` |
-| **Capability with no port at all** | none |
+| **Capability with no port at all** | none — with one honest caveat: the thread registry (ids, statuses, sequence counters) is not a capability here; it is a private map in `ThreadRunner`, and it needs a seam before a restart can recover anything ([L7](LIMITATIONS.md#l7)) |
 | **Real adapters built** | `model` → Gemini. The rest fail at startup with *"catalogued but not implemented yet"* |
 
 Everything else runs emulated today. The ports exist so the real adapters are a
@@ -166,9 +166,12 @@ The plan, stated as a plan:
 | `pnpm infra:up` / `infra:down` | wrap `podman compose` |
 | `pnpm dev:real` | every capability switched to its real adapter at once |
 
-Adapter order, and the reasoning: **messageStore** first, because it is the one
-missing *capability* rather than a missing implementation of an existing one
-([L7](LIMITATIONS.md#l7)); then **sessions**, which shares its Postgres;
+Adapter order, and the reasoning: **messageStore** first, because its port and
+memory adapter are built and the durable adapter is what is missing — and
+because restart recovery also needs the thread registry to stop living in a
+private map, which that adapter's schema (a table keyed by session and thread)
+is the natural place to fix ([L7](LIMITATIONS.md#l7)); then **sessions**,
+which shares its Postgres;
 then **knowledge**, the emulation most easily mistaken for the real thing;
 then **eventStream**, which buys multi-instance;
 then **identity**, which needs a client change as well as a server one.

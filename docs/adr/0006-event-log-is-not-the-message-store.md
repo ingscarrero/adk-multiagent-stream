@@ -1,6 +1,6 @@
 # ADR-0006: The event log is not the message store; recovery rebuilds from a snapshot, not a watermark
 
-**Date:** 2026-08-31 · **Status:** accepted (PR #3; the store itself is planned — L7)
+**Date:** 2026-08-31 · **Status:** accepted (PR #3; port and memory adapter built in PR #8; the durable adapter and the thread-registry seam remain — L7)
 
 ## Context
 
@@ -31,9 +31,10 @@ reconnected with no resume point and looped forever.
 2. **Recovery is a snapshot plus a replay, and the snapshot is a hint.** On
    overrun — resuming below `oldestOffset`, *or* connecting fresh to a session
    whose start has rolled out — the server sends `resync {from}`. The client
-   fetches `GET /api/threads` (identity, status and `lastSeq` per thread;
-   never content), rebuilds missing threads as shells marked
-   `awaitingResume`, and reconnects at `from − 1`. A rebuilt thread does
+   fetches `GET /api/threads` (identity, status, `lastSeq` and — since PR #8 —
+   the settled transcript per thread), hydrates each thread from the
+   transcript directly and idempotently by `seq`, marks it `awaitingResume`,
+   and reconnects at `from − 1`. A rebuilt thread does
    **not** adopt `lastSeq` as a watermark; it accepts the next event wherever
    it lands and learns from that event's `seq` whether a prefix was lost.
    `lastSeq` is used only to decide whether to warn.
@@ -53,12 +54,18 @@ log in front of keyed permanent tables.
 
 ## Consequences
 
-- Today the snapshot returns identity and no messages; the UI says
-  *"Messages for this thread are no longer available"* rather than passing a
-  thread off as complete. A long session degrades into empty cards
-  ([L16](../LIMITATIONS.md#l16)).
-- Adding the store changes what the snapshot returns and nothing about the
-  `resync` frame, the reducer's gates, or the status machine.
+- Before the store, the snapshot returned identity and no messages; the UI
+  said *"Messages for this thread are no longer available"* rather than
+  passing a thread off as complete, and a long session degraded into empty
+  cards ([L16](../LIMITATIONS.md#l16), now closed).
+- Adding the store changed what the snapshot returns and nothing about the
+  `resync` frame, the reducer's gates, or the status machine. It did add one
+  client rule (hydration bypasses the gates and is idempotent by `seq`) and
+  one server rule (`seq` commits only once an event is stored and published,
+  so a refused write leaves no gap).
+- The store does not, on its own, survive a restart: the thread registry
+  that `GET /api/threads` enumerates is still an in-process map
+  ([L7](../LIMITATIONS.md#l7)).
 - The fix is tested at three layers and in the browser against a 40-event
   buffer, because each earlier bug lived in the seam between layers that were
   individually green.

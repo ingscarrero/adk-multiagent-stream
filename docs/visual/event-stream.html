@@ -430,7 +430,8 @@ interface StreamSubscription {
     </div>
 
     <h3>What changes, and what does not</h3>
-    <p><code>SessionHub</code> does not change at all &mdash; it already cannot tell what is behind the port. Neither does the reducer, the protocol, the recovery flow, or any browser test. What changes is one adapter file and a config flag, which is the claim the port was built to make good on.</p>
+    <p>For the <em>event stream</em> adapter, <code>SessionHub</code> does not change at all &mdash; it already cannot tell what is behind the port. What changes is one adapter file and a config flag, which is the claim the port was built to make good on.</p>
+    <p>That claim is about the log, and it is worth being precise about, because the <em>message store</em> did not land as quietly. Giving recovery a transcript to return changed the protocol (<code>ThreadSummary</code> carries <code>transcript</code> and <code>transcriptTruncated</code>), the reducer (hydration bypasses the ordering gates and is idempotent by <code>seq</code>), the recovery flow (the snapshot is read from the store and bounded per thread), and the browser tests (the older thread is now asserted to come back whole rather than to admit its history is gone). The stream port stayed a clean swap; the store port was an addition, and additions touch their callers.</p>
 
     <h3>What Redis still does not fix</h3>
     <p>A shared stream makes multi-instance possible and survives a restart. It was never going to give the feed a message store, and no longer needs to: that is a separate port now, holding settled events keyed by thread with no retention window at all. The stream went back to being a window, which is the only thing it was ever good at.</p>
