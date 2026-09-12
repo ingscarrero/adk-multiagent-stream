@@ -117,7 +117,7 @@ async function followUp(sessionId: string, threadId: string, prompt: string) {
   });
 }
 
-/** Answers a pending human-input request. */
+/** Asks the server to stop a running thread, as the given session. */
 async function cancel(sessionId: string, threadId: string) {
   return fetch(`${baseUrl}/api/threads/${threadId}/cancel`, {
     method: 'POST',
@@ -125,6 +125,7 @@ async function cancel(sessionId: string, threadId: string) {
   });
 }
 
+/** Answers a pending human-input request. */
 async function respond(
   sessionId: string,
   threadId: string,
