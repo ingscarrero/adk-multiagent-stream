@@ -248,10 +248,17 @@ describe('cancelThread', () => {
     expect((init.headers as Record<string, string>)['x-session-id']).not.toHaveLength(0);
   });
 
-  it('surfaces a cancel failure in lastError instead of throwing', async () => {
+  it('surfaces a transport failure in lastError instead of throwing', async () => {
     fetchMock.mockRejectedValueOnce(new Error('offline'));
     const { result } = renderHook(() => useFeedStream());
     await act(() => result.current.cancelThread('thread-1'));
-    expect(result.current.lastError).toBe('Could not cancel the thread.');
+    expect(result.current.lastError).toBe('Could not reach the server.');
+  });
+
+  it('surfaces a rejected cancel (404 for another session\'s thread) instead of treating it as success', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    const { result } = renderHook(() => useFeedStream());
+    await act(() => result.current.cancelThread('thread-1'));
+    expect(result.current.lastError).toBe('Could not cancel the thread (404)');
   });
 });

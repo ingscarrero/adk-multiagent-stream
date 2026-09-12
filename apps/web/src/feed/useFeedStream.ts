@@ -212,13 +212,19 @@ export function useFeedStream(): UseFeedStream {
   }, [sessionId]);
 
   const cancelThread = useCallback(async (threadId: string) => {
+    setLastError(null);
     try {
-      await fetch(`/api/threads/${encodeURIComponent(threadId)}/cancel`, {
+      const response = await fetch(`/api/threads/${encodeURIComponent(threadId)}/cancel`, {
         method: 'POST',
         headers: { 'x-session-id': sessionId },
       });
+      // The server answers 400 (no session), 404 (not this session's thread)
+      // or 409 (already finished); fetch only rejects on transport errors.
+      if (!response.ok) {
+        setLastError(`Could not cancel the thread (${response.status})`);
+      }
     } catch {
-      setLastError('Could not cancel the thread.');
+      setLastError('Could not reach the server.');
     }
   }, [sessionId]);
 
