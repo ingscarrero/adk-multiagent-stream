@@ -36,9 +36,12 @@
  *
  * A lossy drop is not always terminal. When the server reports that a client's
  * resume point has fallen out of its replay buffer, the client fetches
- * `GET /api/threads` and dispatches a `resync` action, which rebuilds the
- * missing threads from that snapshot. Threads restored this way carry
- * `historyTruncated`, because their transcript is genuinely unrecoverable.
+ * `GET /api/threads` and dispatches a `resync` action, which rebuilds every
+ * thread from that snapshot: identity, plus the settled transcript the message
+ * store holds. Hydration applies the transcript directly (it is not a
+ * transport, so the gates do not apply) and idempotently (by `seq`, so a
+ * thread already on screen does not double). `historyTruncated` is reserved
+ * for the case where the store had nothing and the client has nothing either.
  *
  * @see docs/STREAMING-CONTRACT.md
  */
@@ -368,7 +371,8 @@ export const resyncAction = (threads: ThreadSummary[]): FeedAction => ({ kind: '
  * Rebuilds state from a server snapshot after a replay-buffer overrun.
  *
  * Threads we have never seen become shells so they are visible and their events
- * can land; threads we already have keep everything they have.
+ * can land; threads we already have keep everything they have, and take from
+ * the transcript only what is newer than it.
  *
  * ## What this deliberately does not do
  *
@@ -422,16 +426,23 @@ function applyResync(state: FeedState, summaries: ThreadSummary[]): FeedState {
     // predecessors that are never coming. The gates police a *transport*; a
     // store is not one.
     //
-    // Replayed from `queued`, never from the summary's current status. The
-    // transcript is the thread's whole history, so its status transitions are
-    // only legal when walked from the start. Started at the final status
-    // instead, every historical transition is rejected as illegal -- but
+    // Idempotent by `seq`, which is the one gate that *does* carry over. A
+    // thread already on screen has applied everything up to its `lastSeq`, and
+    // `applyToThread` appends a `message.user` unconditionally -- so folding
+    // the whole transcript onto it rendered every follow-up twice. Only what
+    // is newer than the thread is applied, from the status it is actually in.
+    //
+    // A new shell walks the whole transcript from `queued`, never from the
+    // summary's current status. Its status transitions are only legal when
+    // walked from the start; started at the final status instead, every
+    // historical transition is rejected as illegal -- but
     // `thread.input_required` still applies, and a thread that paused for an
     // approval before ending in `error` would come back offering that stale
     // decision again. The summary's status is applied last, below.
-    const hydrated = summary.transcript.reduce(applyToThread, { ...shell, status: 'queued' });
+    const newer = summary.transcript.filter((event) => event.seq > shell.lastSeq);
+    const hydrated = newer.reduce(applyToThread, shell);
 
-    const restoredFromStore = summary.transcript.length > 0;
+    const restoredFromStore = newer.length > 0;
     // A request can only be pending while the thread is paused on it. Any
     // other final status means it was answered, or the run ended without it.
     const { inputRequest, ...rest } = hydrated;
@@ -439,10 +450,19 @@ function applyResync(state: FeedState, summaries: ThreadSummary[]): FeedState {
       ...rest,
       ...(summary.status === 'awaiting_input' && inputRequest ? { inputRequest } : {}),
       status: summary.status,
-      // The store answered, so nothing is missing. History is only genuinely
-      // gone when the thread has no content from either source -- which with
-      // the memory adapter is exactly what a restart looks like.
-      historyTruncated: hydrated.timeline.length === 0 && summary.lastSeq > 0,
+      // Truncated only when history is *known* to be missing. Two ways:
+      //
+      // - The server capped the transcript, and said so.
+      // - The store returned nothing for a thread that has produced events,
+      //   and the client holds nothing for it either. With the memory adapter
+      //   that is what a restart looks like.
+      //
+      // An empty timeline on its own is not evidence: a stored transcript
+      // always holds `thread.created`, and a thread that has only been created
+      // and stepped through statuses has an empty timeline with nothing lost.
+      historyTruncated:
+        summary.transcriptTruncated === true ||
+        (summary.transcript.length === 0 && shell.timeline.length === 0 && summary.lastSeq > 0),
       // The high-water mark never moves backwards. A live thread may already be
       // past the transcript's end -- deltas are not stored, so the store's last
       // seq is the last *settled* event, not the last one the client applied.

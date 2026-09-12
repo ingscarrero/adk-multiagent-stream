@@ -626,4 +626,111 @@ describe('resync recovery (L1)', () => {
     expect(state.stats.droppedRedundant).toBe(2);
     expect(thread(state).historyTruncated).toBe(false);
   });
+
+  it('shows each follow-up once when a visible thread is resynced', () => {
+    // The transcript is folded onto a thread that already rendered it, and a
+    // `message.user` has no id to be idempotent by -- so the fold has to be
+    // idempotent by `seq` instead, or every follow-up appears twice.
+    const conversation: FeedEvent[] = [
+      created(),
+      status(2, 'running'),
+      complete(3, 'first answer'),
+      status(4, 'complete'),
+      userMessage(5, 'and then?'),
+      status(6, 'running'),
+      complete(7, 'second answer', 'm2'),
+      status(8, 'complete'),
+      userMessage(9, 'one more'),
+      status(10, 'running'),
+      complete(11, 'third answer', 'm3'),
+      status(12, 'complete'),
+    ];
+    let state = reduceAll(initialFeedState, conversation);
+    const before = thread(state).timeline;
+    expect(before.filter((item) => item.kind === 'user')).toHaveLength(2);
+
+    state = feedReducer(
+      state,
+      resyncAction([summary({ status: 'complete', lastSeq: 12, transcript: conversation })]),
+    );
+
+    expect(thread(state).timeline).toEqual(before);
+    expect(thread(state).timeline.filter((item) => item.kind === 'user')).toHaveLength(2);
+    expect(thread(state).lastSeq).toBe(12);
+    expect(thread(state).historyTruncated).toBe(false);
+    // Nothing newer came from the store, so the next event is not a store-shaped jump.
+    expect(thread(state).restoredFromStore).toBe(false);
+  });
+
+  it('takes only what is newer than a visible thread from the transcript', () => {
+    // The client fell behind mid-conversation: it has the first turn, the
+    // store has the second. Only the second is applied, and it is applied
+    // from the status the thread is actually in.
+    let state = reduceAll(initialFeedState, [
+      created(),
+      status(2, 'running'),
+      complete(3, 'first answer'),
+      status(4, 'complete'),
+    ]);
+    const transcript: FeedEvent[] = [
+      created(),
+      status(2, 'running'),
+      complete(3, 'first answer'),
+      status(4, 'complete'),
+      userMessage(5, 'and then?'),
+      status(6, 'running'),
+      complete(7, 'second answer', 'm2'),
+      status(8, 'complete'),
+    ];
+    state = feedReducer(state, resyncAction([summary({ status: 'complete', lastSeq: 8, transcript })]));
+
+    expect(thread(state).timeline.map((item) => item.kind)).toEqual(['message', 'user', 'message']);
+    expect(messageText(state, 'm2')).toBe('second answer');
+    expect(thread(state).lastSeq).toBe(8);
+    expect(thread(state).restoredFromStore).toBe(true);
+  });
+
+  it('does not claim truncation for a stored thread that has produced no messages', () => {
+    // Every stored transcript holds `thread.created`, and a thread that has
+    // only been created and stepped through a status has an empty timeline
+    // with nothing lost. An empty timeline is not evidence.
+    const transcript: FeedEvent[] = [created(), status(2, 'running')];
+    const state = feedReducer(
+      initialFeedState,
+      resyncAction([summary({ status: 'running', lastSeq: 2, transcript })]),
+    );
+
+    expect(thread(state).timeline).toEqual([]);
+    expect(thread(state).historyTruncated).toBe(false);
+    expect(thread(state).status).toBe('running');
+  });
+
+  it('claims truncation only when the store returned nothing and nothing is held locally', () => {
+    // The memory adapter after a restart, or a store that lost the thread:
+    // the server says events exist (`lastSeq > 0`), the store has none, and
+    // the client has none. That is the one case the notice is for.
+    const gone = feedReducer(initialFeedState, resyncAction([summary({ lastSeq: 12, transcript: [] })]));
+    expect(thread(gone).historyTruncated).toBe(true);
+
+    // Same snapshot, but the client already holds content: nothing is known to be missing.
+    let held = reduceAll(initialFeedState, [created(), status(2, 'running'), complete(3, 'kept')]);
+    held = feedReducer(held, resyncAction([summary({ lastSeq: 12, transcript: [] })]));
+    expect(thread(held).historyTruncated).toBe(false);
+    expect(messageText(held)).toBe('kept');
+  });
+
+  it('honours the server saying the transcript was capped', () => {
+    // The snapshot carries the newest slice of a longer transcript. The head
+    // exists in the store and simply was not sent, which is loss from the
+    // client's point of view and is said so.
+    const tail: FeedEvent[] = [complete(41, 'the latest answer', 'm9'), status(42, 'complete')];
+    const state = feedReducer(
+      initialFeedState,
+      resyncAction([summary({ status: 'complete', lastSeq: 42, transcript: tail, transcriptTruncated: true })]),
+    );
+
+    expect(messageText(state, 'm9')).toBe('the latest answer');
+    expect(thread(state).historyTruncated).toBe(true);
+    expect(thread(state).lastSeq).toBe(42);
+  });
 });

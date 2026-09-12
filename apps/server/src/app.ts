@@ -53,6 +53,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     sweepIntervalMs: config.sweepIntervalMs,
   });
   const threads = new ThreadRunner({
+    snapshotTranscriptLimit: config.snapshotTranscriptLimit,
     ...deps.runnerOptions,
     sessionService: providers.sessions.service(),
     knowledge: providers.knowledge,
@@ -228,11 +229,16 @@ export function createApp(deps: AppDeps = {}): FeedApp {
   // Typing the params generically keeps `threadId` a string; Express 5 widens
   // untyped `req.params` values to `string | string[]` for wildcard routes.
   /**
-   * A session's threads, without transcripts.
+   * A session's threads, each with its settled transcript from the message
+   * store.
    *
    * The recovery path for a replay-buffer overrun: when the stream tells a
-   * client its resume point is gone, this is what it rebuilds from. Cheap and
-   * idempotent, so a client may call it whenever it suspects it has drifted.
+   * client its resume point is gone, this is what it rebuilds from. Idempotent,
+   * so a client may call it whenever it suspects it has drifted -- but not
+   * cheap: the response grows with the session's stored history, bounded only
+   * by `SNAPSHOT_TRANSCRIPT_LIMIT` events per thread, so it is for recovery and
+   * not for polling. Thread ids come from the in-process registry, which is why
+   * a restart empties this list even with a durable store behind it (L7).
    */
   app.get('/api/threads', async (req: Request, res: Response) => {
     const sessionId = await sessionIdOf(req);

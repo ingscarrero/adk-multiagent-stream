@@ -11,8 +11,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import { feedEventSchema, threadsSnapshotSchema, type FeedEvent } from '@feed/protocol';
+import { resolveProviders, type MessageStore, type Providers } from '@feed/providers';
 import { createApp, type FeedApp } from './app.ts';
 import { loadConfig } from './config.ts';
+import { STORE_WRITE_FAILED, type ThreadRunnerOptions } from './thread-runner.ts';
 
 let feed: FeedApp;
 let server: Server;
@@ -39,6 +41,32 @@ afterEach(async () => {
   await feed.close();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
+
+/**
+ * Runs `fn` against a second app whose providers are partly replaced.
+ *
+ * For the tests that need to see *inside* the store or the stream: a
+ * recording wrapper, a store that refuses a write. No HTTP server -- these
+ * drive `ThreadRunner` directly and read the stream through the port.
+ */
+async function withApp(
+  override: (providers: Providers) => Partial<Providers>,
+  fn: (app: FeedApp) => Promise<void>,
+  runnerOptions: ThreadRunnerOptions = {},
+): Promise<void> {
+  const config = { ...loadConfig({ MODEL_MODE: 'scripted' }), heartbeatMs: 0 };
+  const base = resolveProviders(config.providers);
+  const app = createApp({
+    config,
+    providers: { ...base, ...override(base) },
+    runnerOptions: { chunkDelayMs: 0, ...runnerOptions },
+  });
+  try {
+    await fn(app);
+  } finally {
+    await app.close();
+  }
+}
 
 /** Parses an SSE byte stream into feed events, stopping when `done` says so. */
 async function readStream(
@@ -249,21 +277,237 @@ describe('the durable transcript (L7)', () => {
     // Ordering is the durability guarantee. If publish came first, a client
     // could see an event and a reconnect a millisecond later could find less
     // history than the connection that dropped.
-    const sessionId = 's-store-order';
-    const { threadId } = await startThread(sessionId, 'hello there');
-    const seen = await readStream(`${baseUrl}/api/stream?sessionId=${sessionId}`, (events) =>
-      terminal(events, threadId),
-    );
+    //
+    // A final snapshot cannot tell the two orders apart -- by then both have
+    // happened. So the store is slowed down and every step is recorded: for
+    // each durable seq, its append must have *resolved* before the stream
+    // ever sees it. A publish-first runner fails this on the first event.
+    const log: string[] = [];
+    const slowStore = (inner: MessageStore): MessageStore => ({
+      ...inner,
+      async append(threadId, event) {
+        log.push(`append:start:${event.seq}`);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        await inner.append(threadId, event);
+        log.push(`append:done:${event.seq}`);
+      },
+    });
 
-    const snapshot = threadsSnapshotSchema.parse(
-      await (await fetch(`${baseUrl}/api/threads`, { headers: { 'x-session-id': sessionId } })).json(),
-    );
-    const stored = new Set(
-      (snapshot.threads.find((t) => t.id === threadId)?.transcript ?? []).map((e) => e.seq),
-    );
-    const durableSeen = seen.events.filter((e) => e.threadId === threadId && e.type !== 'message.delta');
+    await withApp(
+      (providers) => ({
+        messageStore: slowStore(providers.messageStore),
+        eventStream: {
+          ...providers.eventStream,
+          append(sessionId, event) {
+            log.push(`publish:${event.seq}`);
+            return providers.eventStream.append(sessionId, event);
+          },
+        },
+      }),
+      async (app) => {
+        const sessionId = 's-store-order';
+        const thread = app.threads.start({
+          sessionId,
+          agent: 'router',
+          prompt: 'hello there',
+          hub: app.hubs.get(sessionId),
+        });
+        await app.threads.drain();
+        expect(app.threads.get(thread.id)?.status).toBe('complete');
 
-    for (const event of durableSeen) expect(stored.has(event.seq)).toBe(true);
+        const durable = log.filter((l) => l.startsWith('append:done:')).map((l) => Number(l.slice(12)));
+        expect(durable.length).toBeGreaterThan(3);
+        for (const seq of durable) {
+          const started = log.indexOf(`append:start:${seq}`);
+          const done = log.indexOf(`append:done:${seq}`);
+          const published = log.indexOf(`publish:${seq}`);
+          expect(started).toBeGreaterThanOrEqual(0);
+          expect(done).toBeGreaterThan(started);
+          // Not observable on the stream until the append had resolved.
+          expect(published).toBeGreaterThan(done);
+        }
+        // Deltas never touch the store, and still reach the stream.
+        expect(log.some((l) => l.startsWith('publish:'))).toBe(true);
+        expect(log.filter((l) => l.startsWith('append:start:')).length).toBe(durable.length);
+      },
+    );
+  });
+
+  it('caps each transcript in the snapshot and says so', async () => {
+    // The store is unbounded on purpose; one JSON response is not. Over the
+    // cap, the newest events are kept -- the terminal status must survive --
+    // and the client is told the head is missing rather than left to infer it.
+    await withApp(() => ({}), async (app) => {
+      const sessionId = 's-snapshot-cap';
+      const thread = app.threads.start({
+        sessionId,
+        agent: 'router',
+        prompt: 'hello there',
+        hub: app.hubs.get(sessionId),
+      });
+      await app.threads.drain();
+
+      const [summary] = await app.threads.restore(sessionId);
+      expect(summary?.transcript).toHaveLength(2);
+      expect(summary?.transcriptTruncated).toBe(true);
+      expect(summary?.transcript.at(-1)).toMatchObject({ type: 'thread.status', status: 'complete' });
+      expect(summary?.lastSeq).toBe(app.threads.summaries(sessionId)[0]?.lastSeq);
+      expect(summary?.id).toBe(thread.id);
+    }, { snapshotTranscriptLimit: 2 });
+  });
+
+  it('reports the status the store has, not a registry snapshot the store has moved past', async () => {
+    // The registry and the store are read as one snapshot: registry first,
+    // then store, and any transcript event past the registry's `lastSeq` is
+    // newer than it. Simulated here by a store that answers with one more
+    // status event than the record has committed -- exactly what a restore
+    // that lands between `append` and the commit would see.
+    await withApp(
+      (providers) => ({
+        messageStore: {
+          ...providers.messageStore,
+          async transcripts(threadIds) {
+            const real = await providers.messageStore.transcripts(threadIds);
+            for (const [id, events] of real) {
+              const last = events.at(-1)!;
+              events.push({ type: 'thread.status', threadId: id, seq: last.seq + 1, ts: last.ts, status: 'cancelled' });
+            }
+            return real;
+          },
+        },
+      }),
+      async (app) => {
+        const sessionId = 's-snapshot-consistent';
+        app.threads.start({ sessionId, agent: 'router', prompt: 'hello there', hub: app.hubs.get(sessionId) });
+        await app.threads.drain();
+
+        const registry = app.threads.summaries(sessionId)[0]!;
+        expect(registry.status).toBe('complete');
+
+        const [summary] = await app.threads.restore(sessionId);
+        // The newer status wins, and `lastSeq` covers it, so the client's
+        // hydration lands on the same status the replay would have delivered.
+        expect(summary?.status).toBe('cancelled');
+        expect(summary?.lastSeq).toBe(registry.lastSeq + 1);
+      },
+    );
+  });
+});
+
+describe('when the message store refuses a write', () => {
+  /** A store that rejects the Nth durable append (1-based) and works otherwise. */
+  const rejectingStore = (inner: MessageStore, failOn: number): MessageStore => {
+    let durable = 0;
+    return {
+      ...inner,
+      append(threadId, event) {
+        if (event.type === 'message.delta') return inner.append(threadId, event);
+        durable += 1;
+        if (durable === failOn) return Promise.reject(new Error('disk full'));
+        return inner.append(threadId, event);
+      },
+    };
+  };
+
+  const collect = async (app: FeedApp, sessionId: string) => {
+    const subscription = await app.providers.eventStream.open(sessionId, null, () => {});
+    const events = subscription.replay.map((entry) => entry.event);
+    await subscription.close();
+    return events;
+  };
+
+  it('ends the thread in error without a gap in seq, and the record agrees', async () => {
+    // The seq is committed only once the event is stored and published, so a
+    // refused write releases it and the wind-down reuses it. A client waiting
+    // for `lastSeq + 1` therefore always gets it -- had the counter advanced
+    // before the append, the error and terminal status would arrive at later
+    // seqs and every client would buffer them forever behind a hole.
+    await withApp(
+      (providers) => ({ messageStore: rejectingStore(providers.messageStore, 2) }),
+      async (app) => {
+        const sessionId = 's-store-refuses';
+        const thread = app.threads.start({
+          sessionId,
+          agent: 'router',
+          prompt: 'hello there',
+          hub: app.hubs.get(sessionId),
+        });
+        await app.threads.drain();
+
+        const events = (await collect(app, sessionId)).filter((e) => e.threadId === thread.id);
+        expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));
+
+        const types = events.map((e) => e.type);
+        expect(types[0]).toBe('thread.created');
+        // The refused draft (`running`) is re-sent, not dropped, so the client
+        // walks the same transitions the server did.
+        expect(statusesOf(events, thread.id)).toEqual(['running', 'error']);
+        const error = events.find((e) => e.type === 'thread.error');
+        expect(error).toMatchObject({ code: STORE_WRITE_FAILED });
+        expect((error as Extract<FeedEvent, { type: 'thread.error' }>).message).toContain('disk full');
+        // No model output: the turn stopped rather than streaming what it could not record.
+        expect(types).not.toContain('message.delta');
+
+        // The registry moved with the wire, so a snapshot reports the failure
+        // instead of a thread stuck in `queued`.
+        expect(app.threads.get(thread.id)?.status).toBe('error');
+        const [summary] = await app.threads.restore(sessionId);
+        expect(summary?.status).toBe('error');
+        expect(summary?.lastSeq).toBe(events.length);
+      },
+    );
+  });
+
+  it('still opens the thread on the wire when the very first write is refused', async () => {
+    // A refused `thread.created` used to leave the thread `queued` with nothing
+    // published: the run never started, and the snapshot reported a thread
+    // that did not exist anywhere a client could see it.
+    await withApp(
+      (providers) => ({ messageStore: rejectingStore(providers.messageStore, 1) }),
+      async (app) => {
+        const sessionId = 's-store-refuses-first';
+        const thread = app.threads.start({
+          sessionId,
+          agent: 'router',
+          prompt: 'hello there',
+          hub: app.hubs.get(sessionId),
+        });
+        await app.threads.drain();
+
+        const events = (await collect(app, sessionId)).filter((e) => e.threadId === thread.id);
+        expect(events.map((e) => e.type)).toEqual([
+          'thread.created',
+          'thread.status',
+          'thread.error',
+          'thread.status',
+        ]);
+        expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4]);
+        expect(app.threads.get(thread.id)?.status).toBe('error');
+      },
+    );
+  });
+
+  it('recovers the transcript when the fault was transient', async () => {
+    // The wind-down still offers every event to the store. A store that
+    // refused once and then recovered ends up holding the whole thread,
+    // including the event it refused -- the hole closes itself.
+    await withApp(
+      (providers) => ({ messageStore: rejectingStore(providers.messageStore, 2) }),
+      async (app) => {
+        const sessionId = 's-store-transient';
+        const thread = app.threads.start({
+          sessionId,
+          agent: 'router',
+          prompt: 'hello there',
+          hub: app.hubs.get(sessionId),
+        });
+        await app.threads.drain();
+
+        const transcript = await app.providers.messageStore.transcript(thread.id);
+        const published = (await collect(app, sessionId)).filter((e) => e.threadId === thread.id);
+        expect(transcript.map((e) => e.seq)).toEqual(published.map((e) => e.seq));
+      },
+    );
   });
 });
 
