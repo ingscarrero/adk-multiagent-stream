@@ -192,7 +192,7 @@ responses carrying only the new chunk, then one final non-partial response
 carrying the whole text. That fidelity is what makes it safe to write the
 adapter against the fake and trust it against the real one.
 
-## The log and the store: two jobs, one of them unfilled
+## The log and the store: two jobs, two ports
 
 The event stream and a message store look like the same thing stored twice. They
 are not, and the difference decides what gets built next.
@@ -245,11 +245,19 @@ Which yields the fallback the recovery path already has the shape of:
 | outside the window | store query, then tail | one query |
 | brand new | store query, then tail | one query |
 
-Today rows two and three return identity with no messages, and the UI says so.
-Adding the store does not delete the `resync` flow — it gives it something to
-return. The reducer's gates are unaffected either way: a transport can still
-deliver duplicates and gaps after a reconnect, so per-thread `seq` and idempotent
-application keep earning their place.
+Rows two and three are served from the store: `GET /api/threads` returns each
+thread's settled transcript, capped per thread by `SNAPSHOT_TRANSCRIPT_LIMIT`
+and flagged when the cap bites. Adding the store did not delete the `resync`
+flow — it gave it something to return. The reducer's gates are unaffected: a
+transport can still deliver duplicates and gaps after a reconnect, so
+per-thread `seq` and idempotent application keep earning their place, and the
+transcript is folded in idempotently by the same `seq`.
+
+The rule has a second consequence the code now enforces. Because the store is
+truth, an event is stored *before* it is published, and its `seq` is committed
+only once both have happened — so a store that refuses a write releases the
+number rather than leaving a gap the client would buffer against forever
+([STREAMING-CONTRACT.md §5c](STREAMING-CONTRACT.md#5c-sequencing-when-the-store-refuses-a-write)).
 
 ### Why not drop the log and keep only a store
 
@@ -271,17 +279,21 @@ writes both, and no one calls that redundant.
 The complete register — including gaps that are *not* deliberate — is
 [LIMITATIONS.md](LIMITATIONS.md). The ones that shape the architecture:
 
-- **In-memory everything.** Sessions, threads, the event log. Each now has a
-  port, so each is a config change rather than a refactor — but only the
-  emulated adapters are written ([L7](LIMITATIONS.md#l7)). Memory is at least
-  bounded in both directions now: per session by `EVENT_RETENTION`, and across
-  sessions by an idle sweep ([L3](LIMITATIONS.md#l3)).
+- **In-memory everything.** Sessions, the event log and the transcript each
+  have a port, so each durable adapter is a config change rather than a
+  refactor — but only the emulated adapters are written. The thread registry
+  does not have one: `ThreadRunner` keeps it in a private map, so a durable
+  store alone does not bring threads back after a restart
+  ([L7](LIMITATIONS.md#l7)). Memory is at least bounded in both directions
+  now: per session by `EVENT_RETENTION`, and across sessions by an idle sweep
+  ([L3](LIMITATIONS.md#l3)).
 - **Single instance.** One process owns a session's log and its subscribers.
   Multi-instance needs the Redis `eventStream` adapter, or sticky sessions
   ([L8](LIMITATIONS.md#l8)).
 - **No durable store.** The message store exists and the conflation below is
-  resolved, but its only adapter is in memory — so sessions, threads, the event
-  log and the transcript all still vanish on restart
+  resolved, but its only adapter is in memory — so sessions, the event log and
+  the transcript all still vanish on restart, and the thread registry would
+  too even with a durable adapter behind the others
   ([L7](LIMITATIONS.md#l7)).
 - **No auth.** `sessionId` is client-generated and unauthenticated. Real
   deployments need a real identity on the stream.

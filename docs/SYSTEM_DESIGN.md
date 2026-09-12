@@ -105,18 +105,23 @@ flowchart LR
   write ceiling under stall, not the log.
 - Fails on restart and on any second instance.
 
-### Phase 1 — a message store (closes L7 and L16)
+### Phase 1 — a message store (closes L16; half of L7)
 
-The one missing *capability* rather than a missing adapter. A `messageStore`
-port written at settle points — `message.complete`, `tool.call`,
-`tool.result`, status transitions — never `message.delta`. Roughly five writes
-per thread instead of twenty-three. Postgres, one table keyed by
-`(sessionId, threadId, seq)`.
-
-The store becomes truth and the stream is demoted to liveness. `GET
-/api/threads` starts returning messages; `historyTruncated` stops being
-user-visible; the `resync` flow keeps its exact shape. See
+**Built:** the `messageStore` port and its memory adapter, written at settle
+points — `message.complete`, `tool.call`, `tool.result`, status transitions —
+never `message.delta`. Roughly five writes per thread instead of twenty-three.
+The store is truth and the stream is demoted to liveness: an event is stored
+before it is published and its `seq` commits only once both have happened.
+`GET /api/threads` returns the settled transcript (capped per thread);
+`historyTruncated` is reserved for history that is genuinely missing; the
+`resync` flow kept its exact shape. See
 [ADR-0006](adr/0006-event-log-is-not-the-message-store.md).
+
+**Remaining:** the durable adapter — Postgres, one table keyed by
+`(sessionId, threadId, seq)` — and the thread registry, which `ThreadRunner`
+still keeps in a private map. A durable store alone cannot list a session's
+threads after a restart, so that table's session index (or a `ThreadStore`
+port) is part of the same phase.
 
 ### Phase 2 — durable agent sessions
 

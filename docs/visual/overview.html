@@ -627,7 +627,7 @@
             <td class="mono">does not affect other threads &middot; leaves no message stuck in a streaming state after cancelling</td>
           </tr>
           <tr>
-            <td><strong>When history is gone after a reconnect</strong></td>
+            <td><strong>When history is genuinely gone after a reconnect</strong> &mdash; the store has nothing for the thread (a restart, with the memory adapter), or the snapshot capped its transcript. An ordinary overrun no longer reaches this row: the transcript comes back from the store</td>
             <td>Show the thread as normal, or drop it silently</td>
             <td>Say so &mdash; in <em>two</em> wordings, because they are different facts. <em>"Earlier messages in this thread were lost"</em> when some survived; <em>"Messages for this thread are no longer available"</em> when none did. The first phrasing on an empty thread implies a partial transcript that does not exist</td>
             <td class="mono">ThreadCard.test.tsx &mdash; says earlier messages were lost when some survived</td>
@@ -672,8 +672,8 @@
 
     <div class="note">
       <span class="note-label">The one to raise before you are asked</span>
-      <p><strong>Nothing survives a restart.</strong> Sessions, thread records, the event log and the transcript all live in process. Every one of them has a port now &mdash; so each real adapter is a config change rather than a redesign &mdash; and not one of those adapters is written.</p>
-      <p>The <em>architectural</em> half of this is done and worth separating from the durability half. The event log used to be the message store as well, and everything that felt wrong about recovery followed from that one conflation. It is two ports now: a log that answers <em>what happened next</em> over a window, and a transcript that answers <em>what is this thread</em> and never forgets. See <a href="architecture.html">The Substrate Line</a>. What remains is ordinary: swap the adapters (<a href="../LIMITATIONS.md">L7</a>).</p>
+      <p><strong>Nothing survives a restart.</strong> Sessions, thread records, the event log and the transcript all live in process. Sessions, the log and the transcript each have a port &mdash; so for those three the real adapter is a config change rather than a redesign, and not one of those adapters is written. Thread records do not: the registry is a private map in <code>ThreadRunner</code>, and the recovery snapshot enumerates it.</p>
+      <p>The <em>architectural</em> half of this is done and worth separating from the durability half. The event log used to be the message store as well, and everything that felt wrong about recovery followed from that one conflation. It is two ports now: a log that answers <em>what happened next</em> over a window, and a transcript that answers <em>what is this thread</em> and never forgets. See <a href="architecture.html">The Substrate Line</a>. What remains is mostly ordinary &mdash; swap the adapters &mdash; plus one seam that is not: a durable store keeps every transcript across a restart and cannot list the threads to return, so the registry needs a port of its own before "restart" is a config change (<a href="../LIMITATIONS.md">L7</a>).</p>
     </div>
   </section>
 

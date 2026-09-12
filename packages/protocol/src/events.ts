@@ -279,6 +279,15 @@ export const threadSummarySchema = z.object({
    * emulated store, and exactly what the Postgres adapter fixes.
    */
   transcript: z.array(feedEventSchema).default([]),
+  /**
+   * Set when `transcript` is the newest slice of a longer one.
+   *
+   * A snapshot is one JSON response and is capped per thread; the store is
+   * not. A client seeing this knows the thread's earlier events exist but were
+   * not sent, which is a different fact from "nothing was stored" and is
+   * rendered as such.
+   */
+  transcriptTruncated: z.boolean().optional(),
 });
 
 export type ThreadSummary = z.infer<typeof threadSummarySchema>;

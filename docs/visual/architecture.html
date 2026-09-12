@@ -439,7 +439,7 @@ eventStream memory          true      true        Redis Streams, Kafka, NATS Jet
       <div class="card-head"><span class="card-name">Emulated &mdash; but not durable yet</span></div>
       <p><strong>The message store now exists.</strong> It used to be the one capability that was <em>absent</em> rather than emulated, with the event stream doing the job badly: a rolled-out transcript was unrecoverable and a thread could come back saying its messages were gone.</p>
       <p>A <code>messageStore</code> port holds settled events keyed by thread, never retained away, and the recovery endpoint reads it. A log answers <em>what happened next</em> over a window; a transcript is <em>state read by key, kept indefinitely</em> &mdash; and they are now two things rather than one thing wearing both hats.</p>
-      <p>What is left is the ordinary kind of gap: its only adapter is in memory. Sessions, threads, the event log and the transcript all still vanish on restart. Every one has a port and none has a durable adapter, which makes the remainder a config change rather than a redesign.</p>
+      <p>What is left is two gaps, and only one of them is the ordinary kind. Sessions, the event log and the transcript each have a port and none has a durable adapter, so for those three the remainder is a config change. The thread registry is different: <code>ThreadRunner</code> keeps thread ids, statuses and sequence counters in a private <code>Map</code> with no port behind it, and the recovery snapshot enumerates that map. A durable store would keep every transcript across a restart and have nobody to ask it for them. Restart recovery is therefore an adapter swap <em>plus</em> a seam that does not exist yet (L7).</p>
     </div>
   </section>
 
