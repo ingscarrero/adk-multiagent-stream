@@ -26,6 +26,15 @@ export function memoryMessageStore(): MessageStore {
         return Promise.resolve();
       }
 
+      // The common case: `seq` is monotonic, so the event belongs at the end.
+      // Unbounded storage makes the cost per append matter -- a scan and a
+      // sort on every write would make a growing thread quadratic to record.
+      const last = existing[existing.length - 1];
+      if (last !== undefined && event.seq > last.seq) {
+        existing.push(event);
+        return Promise.resolve();
+      }
+
       // Idempotent by (threadId, seq). A replay must not double the transcript,
       // and `seq` is already the identity the rest of the system orders by --
       // inventing a second one here would be a second thing to keep correct.
@@ -33,8 +42,9 @@ export function memoryMessageStore(): MessageStore {
       if (at === -1) existing.push(event);
       else existing[at] = event;
 
-      // Written in seq order in practice; sorted anyway so a caller that
-      // appends out of order cannot hand a reader a scrambled transcript.
+      // Only reached for a duplicate or an out-of-order append; sorted so a
+      // caller that appends out of order cannot hand a reader a scrambled
+      // transcript.
       existing.sort((a, b) => a.seq - b.seq);
       return Promise.resolve();
     },

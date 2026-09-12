@@ -69,6 +69,24 @@ function storeContract(name: string, make: () => MessageStore) {
       expect(transcript.map((e) => e.type)).toEqual(['thread.created', 'message.complete']);
     });
 
+    it('repairs order and overwrites duplicates once appends leave the monotonic path', async () => {
+      // The fast path is append-only for a monotonic seq; this is everything
+      // else. Gaps filled late land in place, and a re-sent seq replaces the
+      // earlier copy rather than sitting beside it.
+      const store = make();
+      await store.append('T', created(1));
+      await store.append('T', complete(3, 'third'));
+      await store.append('T', complete(5, 'fifth'));
+      await store.append('T', complete(2, 'second'));
+      await store.append('T', complete(4, 'fourth'));
+      await store.append('T', complete(3, 'third, again'));
+      await store.append('T', complete(6, 'sixth'));
+
+      const transcript = await store.transcript('T');
+      expect(transcript.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(transcript[2]).toMatchObject({ seq: 3, text: 'third, again' });
+    });
+
     it('is idempotent by seq, so a replay does not double the transcript', async () => {
       const store = make();
       await store.append('T', created(1));
