@@ -8,6 +8,8 @@ the layer where it can fail?" rather than "is it a feature".
 
 ```bash
 pnpm install     # Node 22+, pnpm 10+; downloads Chromium for Playwright
+# On a fresh Linux box, Chromium also needs system libraries (this runs apt-get):
+# pnpm exec playwright install --with-deps chromium
 pnpm dev         # http://localhost:5173, fully offline (MODEL_MODE=scripted)
 ```
 
