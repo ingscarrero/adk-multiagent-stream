@@ -213,11 +213,14 @@ export function useFeedStream(): UseFeedStream {
 
   const cancelThread = useCallback(async (threadId: string) => {
     try {
-      await fetch(`/api/threads/${encodeURIComponent(threadId)}/cancel`, { method: 'POST' });
+      await fetch(`/api/threads/${encodeURIComponent(threadId)}/cancel`, {
+        method: 'POST',
+        headers: { 'x-session-id': sessionId },
+      });
     } catch {
       setLastError('Could not cancel the thread.');
     }
-  }, []);
+  }, [sessionId]);
 
   // Both of these follow `startThread`'s shape exactly: POST, report a failure
   // to accept, and update nothing locally. The consequences arrive on the

@@ -118,6 +118,13 @@ async function followUp(sessionId: string, threadId: string, prompt: string) {
 }
 
 /** Answers a pending human-input request. */
+async function cancel(sessionId: string, threadId: string) {
+  return fetch(`${baseUrl}/api/threads/${threadId}/cancel`, {
+    method: 'POST',
+    headers: { 'x-session-id': sessionId },
+  });
+}
+
 async function respond(
   sessionId: string,
   threadId: string,
@@ -573,7 +580,10 @@ describe('cancellation', () => {
       const { threadId } = (await created.json()) as { threadId: string };
 
       await new Promise((resolve) => setTimeout(resolve, 150));
-      const cancelled = await fetch(`${slowUrl}/api/threads/${threadId}/cancel`, { method: 'POST' });
+      const cancelled = await fetch(`${slowUrl}/api/threads/${threadId}/cancel`, {
+        method: 'POST',
+        headers: { 'x-session-id': 's-cancel' },
+      });
       expect(cancelled.status).toBe(202);
 
       await slow.threads.drain();
@@ -599,10 +609,51 @@ describe('cancellation', () => {
     const { threadId } = await startThread('s-cancel-2', 'hello');
     await feed.threads.drain();
 
-    expect((await fetch(`${baseUrl}/api/threads/nope/cancel`, { method: 'POST' })).status).toBe(404);
-    expect(
-      (await fetch(`${baseUrl}/api/threads/${threadId}/cancel`, { method: 'POST' })).status,
-    ).toBe(409);
+    expect((await cancel('s-cancel-2', 'nope')).status).toBe(404);
+    expect((await cancel('s-cancel-2', threadId)).status).toBe(409);
+  });
+
+  it('refuses a cancel without a session, and from a session that does not own the thread', async () => {
+    // Knowing a thread id must not be enough to stop it: the wrong session gets
+    // the same 404 an unknown id would, and the run carries on to completion.
+    const slow = createApp({
+      config: { ...loadConfig({ MODEL_MODE: 'scripted' }), heartbeatMs: 0 },
+      runnerOptions: { chunkDelayMs: 40 },
+    });
+    const slowServer = await new Promise<Server>((resolve) => {
+      const s = slow.app.listen(0, () => resolve(s));
+    });
+    const port = (slowServer.address() as { port: number }).port;
+    const slowUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const created = await fetch(`${slowUrl}/api/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-id': 's-cancel-owner' },
+        body: JSON.stringify({ prompt: 'what is your return policy?' }),
+      });
+      const { threadId } = (await created.json()) as { threadId: string };
+
+      const anonymous = await fetch(`${slowUrl}/api/threads/${threadId}/cancel`, { method: 'POST' });
+      expect(anonymous.status).toBe(400);
+
+      const intruder = await fetch(`${slowUrl}/api/threads/${threadId}/cancel`, {
+        method: 'POST',
+        headers: { 'x-session-id': 's-cancel-intruder' },
+      });
+      expect(intruder.status).toBe(404);
+      expect(slow.threads.get(threadId)?.status).not.toBe('cancelled');
+
+      await slow.threads.drain();
+      const { events } = await readStream(
+        `${slowUrl}/api/stream?sessionId=s-cancel-owner`,
+        (all) => terminal(all, threadId),
+      );
+      expect(events.at(-1)).toMatchObject({ type: 'thread.status', status: 'complete' });
+    } finally {
+      await slow.close();
+      await new Promise<void>((resolve) => slowServer.close(() => resolve()));
+    }
   });
 });
 
