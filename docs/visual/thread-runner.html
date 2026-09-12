@@ -276,17 +276,34 @@
 
   <section>
     <h2>Sequence numbers are assigned in exactly one place</h2>
-    <pre><code>private emit(hub, threadId, draft) {
-  const seq = (this.sequences.get(threadId) ?? 0) + 1;
-  this.sequences.set(threadId, seq);
+    <pre><code>private async commit(hub, thread, draft, mode) {
+  <span class="cmt">// Reserved now, committed below -- only once stored and on the wire.</span>
+  const seq = (this.sequences.get(thread.id) ?? 0) + 1;
 
   <span class="cmt">// Validating on the way out means a protocol mistake fails in the</span>
   <span class="cmt">// server's own tests rather than as a dropped frame in the browser.</span>
-  const event = parseFeedEvent({ ...draft, threadId, seq, ts: Date.now() });
-  hub.publish(event);
+  const event = parseFeedEvent({ ...draft, threadId: thread.id, seq, ts: Date.now() });
+
+  try {
+    await this.messageStore.append(thread.id, event);   <span class="cmt">// store first</span>
+  } catch (cause) {
+    if (mode === 'strict') throw new StoreWriteError(draft, cause);  <span class="cmt">// seq released</span>
+  }
+  await hub.publish(event);                              <span class="cmt">// then the wire</span>
+
+  this.sequences.set(thread.id, seq);                    <span class="cmt">// then commit: counter,</span>
+  if (event.type === 'thread.status') {                  <span class="cmt">// status and pending request</span>
+    thread.status = assertTransition(thread.status, event.status);  <span class="cmt">// move together</span>
+  }
   return event;
 }</code></pre>
-    <p>Every draft from the translator passes through here. One counter, one increment site, one place to get it wrong &mdash; which matters because a skipped <code>seq</code> is not cosmetic: the client buffers against a gap that never closes and the thread stalls permanently.</p>
+    <p>Every draft from the translator passes through here, one at a time per thread &mdash; <code>emit</code> appends each call to a per-thread promise chain, so two drafts cannot reserve the same number. One counter, one commit site, one place to get it wrong &mdash; which matters because a skipped <code>seq</code> is not cosmetic: the client buffers against a gap that never closes and the thread stalls permanently.</p>
+
+    <div class="note">
+      <span class="note-label">Why the counter moves last</span>
+      <p>The store is written before the event is published, so a client can never see an event a reconnect could not recover. That raises the question of what <code>seq</code> means for an event the store <em>refuses</em>. If the counter advanced first, the refused number would be consumed and never published, the error and terminal status would arrive at later numbers, and every client would buffer them forever behind a hole nobody can fill. So the number is only <em>reserved</em> until the event is stored and on the wire; a refusal releases it and the next emit reuses it. Contract &sect;5c.</p>
+      <p>What follows a refusal is a wind-down, not a retry loop: the refused draft and everything after it go out <em>tolerant</em> of the store (still offered to it, published regardless), the model call is aborted, and the turn closes with <code>thread.error</code> (<code>store_write_failed</code>) and a terminal status. The record moves with the wire, so a snapshot reports the thread as <code>error</code> rather than stuck in <code>queued</code> &mdash; even when the refused write was <code>thread.created</code> itself.</p>
+    </div>
 
     <div class="note">
       <span class="note-label">Why validate on the hot path</span>
@@ -294,7 +311,7 @@
     </div>
 
     <h3>The same counter reports itself</h3>
-    <p><code>summaries(sessionId)</code> serves <code>GET /api/threads</code>, and the <code>lastSeq</code> it reports comes from the very map <code>emit</code> increments. One counter assigns sequence numbers and one counter answers "where has this thread got to" &mdash; they cannot disagree, because they are the same thing.</p>
+    <p><code>summaries(sessionId)</code> is the registry half of <code>GET /api/threads</code> (<code>restore()</code> adds each thread's transcript from the message store), and the <code>lastSeq</code> it reports comes from the very map <code>commit</code> writes. One counter assigns sequence numbers and one counter answers "where has this thread got to" &mdash; they cannot disagree, because they are the same thing. <code>restore()</code> reads the registry first and the store second: the store is appended before the counter commits, so it can be ahead and never behind, and any transcript event past the registry's <code>lastSeq</code> is newer &mdash; its status is the one reported, or hydration would land on a status the replay then drops as redundant.</p>
     <pre><code>summaries(sessionId) {
   return this.list(sessionId)
     .sort((a, b) =&gt; a.createdAt - b.createdAt)
@@ -309,7 +326,7 @@
     <p>Sorted by <code>createdAt</code> so a rebuilt feed comes back in the order it was originally rendered.</p>
 
     <h3>Two state machines, stepped together</h3>
-    <p>The publish helper applies <code>assertTransition</code> to the thread record whenever the translator emits a status. The record and the translator therefore advance in lockstep, and any divergence between them throws immediately rather than producing a UI that slowly drifts from reality. That assertion has already earned its place once.</p>
+    <p><code>commit</code> applies <code>assertTransition</code> to the thread record whenever the translator emits a status, in the same synchronous step that advances the counter. The record and the translator therefore advance in lockstep, and any divergence between them throws immediately rather than producing a UI that slowly drifts from reality. That assertion has already earned its place once.</p>
   </section>
 
   <section>
@@ -327,7 +344,7 @@
       </table>
     </div>
 
-    <p>All three call the same private <code>run(thread, hub, newMessage)</code>. Sequencing, status stepping, cancellation and teardown are shared, which is the reason this is one method rather than three that would drift. The <strong>session id never changes</strong>, so ADK accumulates the conversation across turns &mdash; that accumulation is what makes a follow-up answerable and a paused tool call resumable.</p>
+    <p>All three call the same private <code>run(thread, hub, newMessage, opening?)</code> &mdash; <code>start()</code> and <code>followUp()</code> pass the event that opens the turn (<code>thread.created</code>, <code>message.user</code>) so it is the run's own first emit and a refused write on it is wound down like any other. Sequencing, status stepping, cancellation and teardown are shared, which is the reason this is one method rather than three that would drift. The <strong>session id never changes</strong>, so ADK accumulates the conversation across turns &mdash; that accumulation is what makes a follow-up answerable and a paused tool call resumable.</p>
 
     <div class="card ok">
       <div class="card-head"><span class="card-num">01</span><span class="card-name">The translator is seeded with the thread's current status</span></div>

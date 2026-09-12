@@ -299,10 +299,13 @@ the hub reads it and writes SSE frames.
   arrive. They accept the next event wherever it lands and learn from its `seq`
   whether a prefix was genuinely lost.
 
-  Identity and status are recovered; the transcript of rolled-out events is not,
-  because events live only in the buffer. A restored thread is marked
-  `historyTruncated` and says so in the UI rather than passing itself off as
-  complete.
+  Identity, status and the settled transcript are recovered: the snapshot
+  reads the message store, which has no retention window (§5a). A restored
+  thread is marked `historyTruncated` only when history is *known* to be
+  missing — the store returned nothing for a thread that has produced events
+  and the client holds nothing for it either (a restart, with the memory
+  adapter), or the server capped the transcript and said so. An empty timeline
+  on its own is not loss: every stored transcript begins with `thread.created`.
 
 ### Two things that are easy to get wrong
 
@@ -340,11 +343,32 @@ Both behaviours are covered by the Playwright suite, which runs on Chromium
 GET /api/threads?sessionId=S  →  { threads: ThreadSummary[] }
 ```
 
-`ThreadSummary` is `{ id, prompt, agent, status, createdAt, lastSeq, transcript }`
-— a thread's identity and position, plus its settled events from the message
-store (§5b). It exists for exactly one caller, the recovery path above, and is
-cheap and idempotent so a client may call it whenever it suspects it has
-drifted.
+`ThreadSummary` is `{ id, prompt, agent, status, createdAt, lastSeq, transcript,
+transcriptTruncated? }` — a thread's identity and position, plus its settled
+events from the message store (§5b). It exists for exactly one caller, the
+recovery path above. It is idempotent, so a client may call it whenever it
+suspects it has drifted; it is **not** cheap, and is not meant for polling.
+The response grows with the session's stored history, bounded per thread by
+`SNAPSHOT_TRANSCRIPT_LIMIT` (default 1000 settled events): a thread over the
+cap comes back with its *newest* events and `transcriptTruncated: true`, which
+the client renders as lost history rather than passing a tail off as the whole.
+There is no paging across snapshots; the one caller needs the recent state of
+every thread, not the full text of any.
+
+**The snapshot is consistent across its two sources.** The thread registry is
+read first and the store second. An event is appended to the store *before*
+its `seq` and status are committed to the registry, so the store can be ahead
+of the registry and never behind it; any transcript event past the registry's
+`lastSeq` is newer, and the last status among them is the one reported. Read
+the other way round, a snapshot could carry a status the transcript had moved
+past, hydration would apply it last, and the live replay of the newer status
+would then be dropped as redundant — a thread stuck on a status it left.
+
+**What the snapshot cannot list.** Thread ids come from the registry, which is
+an in-process map with no provider port. A durable store keeps every
+transcript across a restart; it does not hand back the list of threads to ask
+for, so after a restart this endpoint returns an empty session even when the
+store is full. That is the open half of [L7](LIMITATIONS.md#l7).
 
 `lastSeq` is a hint, not a watermark. A rebuilt thread uses it only to decide
 whether to warn that history may be missing; it does not seek forward to it,
@@ -391,32 +415,69 @@ from the store and see a complete conversation.
 Note what that does **not** mean: persisting the log is not the fix. A Redis
 adapter makes this same window durable and multi-instance, and a transcript
 still expires. The division of labour is set out in
-[ARCHITECTURE.md](ARCHITECTURE.md#the-log-and-the-store-two-jobs-one-of-them-unfilled).
+[ARCHITECTURE.md](ARCHITECTURE.md#the-log-and-the-store-two-jobs-two-ports).
 
-Everything that feels wrong about recovery here follows from that one
-conflation:
+For the record, everything that used to feel wrong about recovery followed from
+that one conflation, and each item is now closed:
 
-- The snapshot returns a thread's **identity** (`prompt`, `agent`, `status`,
-  `lastSeq`) and no messages, because there are no messages to return.
+- The snapshot returned a thread's **identity** and no messages, because there
+  were none to return. It now returns the settled transcript (§5a).
 - `historyTruncated` and *"Messages for this thread are no longer available"*
-  exist at all. A chat product would never say that; it would fetch the
-  messages.
-- A long session degrades into unreadable history ([L16](LIMITATIONS.md#l16)),
-  because the readable window is fixed while the thread list grows.
+  were the normal outcome of an overrun. They are now reserved for history
+  that is genuinely missing: a store with nothing for the thread, or a capped
+  transcript.
+- A long session degraded into unreadable history ([L16](LIMITATIONS.md#l16)),
+  because the readable window was fixed while the thread list grew. Closed.
 
 So: the protocol is a faithful implementation of a real pattern, and adding the
 store tore none of it out, exactly as predicted. The `resync` frame, the
 snapshot endpoint and the reducer's gates all kept their shape — a transport
 still delivers duplicates and gaps after a reconnect however durable the history
-is. The snapshot returns messages instead of metadata, and truncation stopped
-being user-visible ([L16](LIMITATIONS.md#l16)).
+is.
 
-**One thing did change, in the client.** A transcript is not a transport, and
+**Two things did change, in the client.** A transcript is not a transport, and
 feeding it through the ordering gates would be a category error: it stores
 settled events only, so the `seq` numbers that belonged to deltas are absent by
 design. Gate 3 would read those holes as loss and buffer the whole transcript
 against predecessors that are never coming. So hydration bypasses the gates,
 and the gates keep policing the only thing they were ever about — the wire.
+The one rule that *does* carry over is idempotence by `seq`: a thread already
+on screen takes from the transcript only what is newer than its `lastSeq`, so a
+resync never renders a follow-up twice. And because hydration bypasses the
+gates, the browser tests for recovery changed with it — the older thread is now
+asserted to come back whole, not to admit its history is gone.
+
+## 5c. Sequencing when the store refuses a write
+
+The store is written *before* the event is published (§5b), which raises the
+question of what `seq` means for an event the store rejected. The choice made
+here is **atomic commit**: the next `seq` is reserved when an emit begins and
+committed only once the event is both stored and on the wire. A refused append
+releases the reservation, and the next emit for the thread reuses the number.
+
+The alternative — advance the counter first, then append — produces a gap a
+client can never close: the rejected event's `seq` is consumed but never
+published, the error and terminal status arrive at later numbers, and every
+client buffers them forever behind a hole the store cannot fill. Atomic commit
+costs one promise chain per thread, so emits for a thread run strictly in call
+order and two of them cannot reserve the same number.
+
+What follows a refusal is a wind-down rather than a retry loop:
+
+- The refused draft and everything after it are emitted **tolerant** of the
+  store: still offered to it, so a fault that has cleared leaves the transcript
+  whole, but published regardless. A thread that cannot record its own failure
+  must still be able to report it.
+- The model call is aborted, so nothing is generated that cannot be recorded.
+- The turn closes with `thread.error` carrying `code: "store_write_failed"`,
+  then a terminal `error` status — reason before state, as always (§2).
+- The registry moves with the wire, so a snapshot taken afterwards reports the
+  failed thread as `error`, not as a thread stuck in `queued`.
+
+The invariant, stated once: **a `seq` is committed exactly when its event is on
+the wire.** On the ordinary path that also means it is in the store. On the
+wind-down it may not be, and the snapshot's status (from the registry) covers
+the difference honestly.
 
 ## 6. Cancellation
 

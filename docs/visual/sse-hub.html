@@ -410,7 +410,7 @@ data: {"type":"message.delta", ...}
     </div>
 
     <h3>What comes back, and what cannot</h3>
-    <p>The snapshot carries each thread's identity, status and <code>lastSeq</code> &mdash; never its transcript. Events live only in this buffer, so anything rolled out is genuinely gone. A rebuilt thread is marked <code>historyTruncated</code> and says so: <em>"Earlier messages were lost"</em> when some survived, <em>"Messages for this thread are no longer available"</em> when none did.</p>
+    <p>The snapshot carries each thread's identity, status, <code>lastSeq</code> and its settled transcript from the message store, which has no retention window &mdash; so a thread whose events rolled out of this buffer comes back whole. What this buffer cannot supply is exactly what the store is for. The snapshot is bounded per thread (<code>SNAPSHOT_TRANSCRIPT_LIMIT</code>) and is not cheap, which is why it serves recovery and not polling. A rebuilt thread is marked <code>historyTruncated</code> only when history is known to be missing &mdash; the store had nothing for a thread that has produced events, or the transcript was capped &mdash; and then says so: <em>"Earlier messages were lost"</em> when some survived, <em>"Messages for this thread are no longer available"</em> when none did.</p>
   </section>
 
   <section>

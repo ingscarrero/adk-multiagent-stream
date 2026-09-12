@@ -248,6 +248,7 @@ Everything is optional. See [`.env.example`](.env.example).
 | `SCRIPTED_CHUNK_DELAY_MS` | `25` | Delay between streamed chunks in scripted mode. `pnpm dev:demo` sets this to `200`; at the default a thread finishes in ~0.5s and the Stop button is gone before you can click it ([L17](docs/LIMITATIONS.md#l17)) |
 | `TOOL_LATENCY_MS` | `150` | Simulated latency per tool call, scripted mode only. `pnpm dev:demo` sets this to `400` |
 | `EVENT_RETENTION` | `500` | Events retained per session for reconnect. `SSE_REPLAY_BUFFER` is still honoured as the older name |
+| `SNAPSHOT_TRANSCRIPT_LIMIT` | `1000` | Settled events `GET /api/threads` carries per thread, newest first; a capped thread is flagged `transcriptTruncated` ([L7](docs/LIMITATIONS.md#l7)) |
 | `PROVIDER_SESSIONS` \| `_KNOWLEDGE` \| `_IDENTITY` \| `_EVENTSTREAM` \| `_MESSAGESTORE` | all emulated by default | Which adapter backs each capability. `GET /api/health` reports the live values. See [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 
 ## Known limits
@@ -256,8 +257,10 @@ Every one of these is recorded with its cause, blast radius, and fix in
 **[docs/LIMITATIONS.md](docs/LIMITATIONS.md)**. The headlines:
 
 - **Everything is in memory** — sessions, threads, the event log and the
-  transcript. Each has a port and none has a durable adapter yet, so nothing
-  survives a restart ([L7](docs/LIMITATIONS.md#l7)).
+  transcript, so nothing survives a restart. Sessions, the event log and the
+  transcript each have a port with no durable adapter yet; the thread registry
+  has no port at all and lives in a private map, so restart recovery is more
+  than an adapter swap ([L7](docs/LIMITATIONS.md#l7)).
 - **Single instance, no auth, no virtualisation**
   ([L8](docs/LIMITATIONS.md#l8)–[L10](docs/LIMITATIONS.md#l10)).
 - **No responsive breakpoints** — desktop widths only
