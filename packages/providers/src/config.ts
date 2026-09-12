@@ -23,7 +23,7 @@ export interface ProviderConfig {
   messageStore: MessageStoreMode;
   /** Events retained per session. The window a reconnecting client can resume within. */
   eventRetention: number;
-  /** Required by `sessions=postgres` and `knowledge=vector`. */
+  /** Required by `sessions=postgres`, `knowledge=vector` and `messageStore=postgres`. */
   databaseUrl?: string;
   /** Required by `identity=jwt`. */
   jwtSecret?: string;
@@ -75,9 +75,12 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
   const jwtSecret = env['JWT_SECRET'];
 
   // Fail at startup, naming the variable, rather than on first use.
-  if ((sessions === 'postgres' || knowledge === 'vector') && !databaseUrl) {
+  if (
+    (sessions === 'postgres' || knowledge === 'vector' || messageStore === 'postgres') &&
+    !databaseUrl
+  ) {
     throw new Error(
-      `PROVIDER_SESSIONS=postgres and PROVIDER_KNOWLEDGE=vector require DATABASE_URL. See docs/PROVIDERS.md.`,
+      `PROVIDER_SESSIONS=postgres, PROVIDER_KNOWLEDGE=vector and PROVIDER_MESSAGESTORE=postgres require DATABASE_URL. See docs/PROVIDERS.md.`,
     );
   }
   if (identity === 'jwt' && !jwtSecret) {

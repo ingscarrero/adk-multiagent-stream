@@ -42,6 +42,9 @@ describe('provider config', () => {
     expect(() => loadProviderConfig({ PROVIDER_KNOWLEDGE: 'vector' })).toThrowError(
       /DATABASE_URL/,
     );
+    expect(() => loadProviderConfig({ PROVIDER_MESSAGESTORE: 'postgres' })).toThrowError(
+      /DATABASE_URL/,
+    );
     expect(() => loadProviderConfig({ PROVIDER_IDENTITY: 'jwt' })).toThrowError(/JWT_SECRET/);
     expect(() => loadProviderConfig({ PROVIDER_EVENTSTREAM: 'redis' })).toThrowError(/REDIS_URL/);
   });
