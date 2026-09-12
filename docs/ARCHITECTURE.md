@@ -197,7 +197,7 @@ adapter against the fake and trust it against the real one.
 The event stream and a message store look like the same thing stored twice. They
 are not, and the difference decides what gets built next.
 
-| | `eventStream` | `messageStore` (planned) |
+| | `eventStream` | `messageStore` |
 |---|---|---|
 | Answers | *what happened next?* | *what is this thread?* |
 | Access | sequential, from an offset | random, by `threadId` |
@@ -220,7 +220,14 @@ So neither replaces the other:
   it, history has an expiry date measured in events — which is today
   ([L7](LIMITATIONS.md#l7), [L16](LIMITATIONS.md#l16)).
 
-Having a stream was never the mistake. Using the stream **as** the store is.
+Having a stream was never the mistake. Using the stream **as** the store was,
+and that is now fixed: the store holds settled events keyed by thread, the
+stream keeps its retention window, and `GET /api/threads` reads the store.
+
+The one place the distinction had to be enforced in code is the client. A
+transcript is not a transport, so hydration bypasses the reducer's ordering
+gates — its gaps are the delta `seq` numbers the store deliberately never kept,
+and a gate that treated them as loss would buffer a complete transcript forever.
 
 ### Where they overlap, and which one wins
 
@@ -272,9 +279,10 @@ The complete register — including gaps that are *not* deliberate — is
 - **Single instance.** One process owns a session's log and its subscribers.
   Multi-instance needs the Redis `eventStream` adapter, or sticky sessions
   ([L8](LIMITATIONS.md#l8)).
-- **No message store.** The event log is the only place messages exist. This is
-  the one architectural conflation in the repo, and it has its own section
-  below.
+- **No durable store.** The message store exists and the conflation below is
+  resolved, but its only adapter is in memory — so sessions, threads, the event
+  log and the transcript all still vanish on restart
+  ([L7](LIMITATIONS.md#l7)).
 - **No auth.** `sessionId` is client-generated and unauthenticated. Real
   deployments need a real identity on the stream.
 - **`maxLlmCalls: 20`** per run, as a runaway-loop backstop.

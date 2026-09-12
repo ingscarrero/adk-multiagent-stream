@@ -13,6 +13,7 @@
 
 import type { BaseSessionService } from '@google/adk';
 import type { EventStream } from './eventstream/port.ts';
+import type { MessageStore } from './messagestore/port.ts';
 
 /** Conversation state for the agent runtime. ADK's own `BaseSessionService` is the port. */
 export interface SessionProvider {
@@ -77,6 +78,7 @@ export interface Providers {
   identity: IdentityProvider;
   /** Per-session append-only stream: storage, retention, replay and delivery. */
   eventStream: EventStream;
+  messageStore: MessageStore;
   /** Releases every provider that holds a connection. */
   close(): Promise<void>;
 }

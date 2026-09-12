@@ -643,8 +643,8 @@
       <p>Every decision above resolves one of those ambiguities in the user's favour, and each costs something &mdash; an extra event, a wider protocol, a second wording to maintain. That is the trade the column headings are there to make visible.</p>
     </div>
 
-    <h3>Three that are only half-won</h3>
-    <p><strong>Lost history can be named but not recovered.</strong> A restored thread says its messages are gone, and after a long session the feed becomes mostly those notices, because the thread list grows while the readable window does not (<a href="../LIMITATIONS.md">L16</a>). The honest wording and the quiet rendering are built; the store that would make the notice unnecessary is not, which is <a href="../LIMITATIONS.md">L7</a> and the subject of <a href="architecture.html">The Substrate Line</a>.</p>
+    <h3>Two that are only half-won</h3>
+    <p><strong>Lost history could be named but not recovered</strong> &mdash; until the message store landed. A restored thread used to say its messages were gone, and a long session degraded into mostly those notices. The transcript now comes from a store with no retention window, so a rebuilt thread arrives whole however far the stream has rolled past it (<a href="../LIMITATIONS.md">L16</a>, fixed). What survives is the emulated adapter: with the memory store a <em>restart</em> still loses everything, which is the open half of <a href="../LIMITATIONS.md">L7</a>.</p>
 
     <p><strong>A denied action needs an answer written for it.</strong> The scripted model reaches the same script position whether an approval was granted or refused, so the first version of the confirmation gate reported a denied refund as <em>applied</em> &mdash; while every other assertion passed. Fixed with <code>rejectedText</code>, the one place a script reads a tool <em>result</em> rather than counting rounds. A real model reads the refusal payload; a fake has to be told about it.</p>
 
@@ -672,8 +672,8 @@
 
     <div class="note">
       <span class="note-label">The one to raise before you are asked</span>
-      <p><strong>The event log is also the message store.</strong> There is nowhere else agent messages exist, so history expires with the retention window rather than being kept. Everything that feels wrong about recovery follows from that single conflation: a snapshot that returns identity and no messages, and a long session degrading into unreadable threads.</p>
-      <p>It is written down as <a href="../LIMITATIONS.md">L7</a> and <a href="../LIMITATIONS.md">L16</a>, the fix is scoped &mdash; a <code>messageStore</code> port written at settle points only &mdash; and the reasoning for why persisting the log is <em>not</em> the fix is in <a href="architecture.html">The Substrate Line</a>.</p>
+      <p><strong>Nothing survives a restart.</strong> Sessions, thread records, the event log and the transcript all live in process. Every one of them has a port now &mdash; so each real adapter is a config change rather than a redesign &mdash; and not one of those adapters is written.</p>
+      <p>The <em>architectural</em> half of this is done and worth separating from the durability half. The event log used to be the message store as well, and everything that felt wrong about recovery followed from that one conflation. It is two ports now: a log that answers <em>what happened next</em> over a window, and a transcript that answers <em>what is this thread</em> and never forgets. See <a href="architecture.html">The Substrate Line</a>. What remains is ordinary: swap the adapters (<a href="../LIMITATIONS.md">L7</a>).</p>
     </div>
   </section>
 
@@ -684,11 +684,11 @@
         <thead><tr><th>&nbsp;</th><th class="mono">Count</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td>Packages</td><td class="mono">7</td><td>Consumed as TypeScript source &mdash; no build step between them</td></tr>
-          <tr><td>Unit + integration tests</td><td class="mono">259</td><td>Protocol, reducer, components, adapter, HTTP/SSE, providers, evals</td></tr>
+          <tr><td>Unit + integration tests</td><td class="mono">271</td><td>Protocol, reducer, components, adapter, HTTP/SSE, providers, evals</td></tr>
           <tr><td>Browser tests</td><td class="mono">81</td><td>Chromium 43, Firefox 34, recovery 4</td></tr>
           <tr><td>Eval cases</td><td class="mono">7</td><td>Run as a CLI and inside <code>pnpm test</code>, so they gate</td></tr>
           <tr><td>Status transitions asserted</td><td class="mono">64</td><td>Every <code>(from, to)</code> pair, against an independently written table</td></tr>
-          <tr><td>Recorded limitations</td><td class="mono">17</td><td>Six fixed and kept struck through, because the reasoning outlives the list. No correctness item is open</td></tr>
+          <tr><td>Recorded limitations</td><td class="mono">17</td><td>Seven fixed and kept struck through, because the reasoning outlives the list. No correctness item is open</td></tr>
           <tr><td>External services required</td><td class="mono">0</td><td><code>pnpm install &amp;&amp; pnpm dev</code>. No key, no container</td></tr>
         </tbody>
       </table>

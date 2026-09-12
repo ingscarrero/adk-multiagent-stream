@@ -676,6 +676,22 @@ const updated = applyWithDrain(existing, event, stats);</code></pre>
 
   <!-- ============================= DRAIN ============================= -->
   <section>
+    <h2>The one input that skips every gate</h2>
+    <p class="lede">A durable transcript is not a transport, and running it through the gates would be a category error.</p>
+
+    <p>Recovery now hydrates a thread from the message store before the stream replays anything. Those events go straight into <code>applyToThread</code> &mdash; no ordering check, no gap check, no drop counting.</p>
+
+    <p>The reason is in what the store keeps. It holds <strong>settled events only</strong>: everything except <code>message.delta</code>, because a delta exists to show text before it is finished and <code>message.complete</code> carries the authoritative full text anyway. So a transcript's <code>seq</code> numbers have holes, and the holes are exactly where the deltas were.</p>
+
+    <div class="card bad">
+      <div class="card-head"><span class="card-name">What gate 3 would do with it</span></div>
+      <p>Read every one of those holes as a gap, buffer the entire transcript against predecessors that are never coming, and render an empty thread while holding its whole history in <code>buffered</code>. The gates are not wrong; they are being asked a question about a transport, by something that is not one.</p>
+    </div>
+
+    <p>So the rule the gates encode &mdash; <em>a missing <code>seq</code> means something was lost</em> &mdash; is true of the wire and false of the store. Hydration is the one path where the client trusts its input completely, and it can, because the store is the thing the gates exist to compensate for the absence of.</p>
+
+    <p>Afterwards the thread is marked <code>awaitingResume</code> and <code>restoredFromStore</code>, and the live replay lands on top. Most of it is now redundant &mdash; the store already supplied it &mdash; which shows up as <code>droppedRedundant</code> climbing rather than <code>applied</code>. That is a healthy overlap, and <code>restoredFromStore</code> is what stops the next forward jump being misread as loss.</p>
+
     <h2>The drain</h2>
     <p class="lede">Buffering alone would stall forever. The drain is what makes out-of-order delivery invisible instead of merely survivable: the moment the missing event lands, everything queued behind it is applied in one pass, and the UI renders once.</p>
 

@@ -27,19 +27,18 @@ named as such.
 
 | | |
 |---|---|
-| **Ports built** | `sessions`, `knowledge`, `identity`, `eventStream` |
-| **Capability with no port at all** | `messageStore` — see below, and [L7](LIMITATIONS.md#l7) |
+| **Ports built** | `sessions`, `knowledge`, `identity`, `eventStream`, `messageStore` |
+| **Capability with no port at all** | none |
 | **Real adapters built** | `model` → Gemini. The rest fail at startup with *"catalogued but not implemented yet"* |
 
 Everything else runs emulated today. The ports exist so the real adapters are a
 config change rather than a refactor.
 
-**`messageStore` is a different kind of gap from the others.** Every row in the
-matrix below is a real capability with an emulated adapter — swap the adapter
-and the code around it does not change. A message store is not emulated here; it
-is *absent*, and the event log is standing in for it. That is the one place
-where the substitution test fails, because there is no adapter to swap. It is
-[the next thing to build](ARCHITECTURE.md#the-log-and-the-store-two-jobs-one-of-them-unfilled).
+**`messageStore` was the one capability that was absent rather than emulated**,
+with the event log standing in for it. It now has a port and a memory adapter,
+so the substitution test passes everywhere: swap the adapter and the code around
+it does not change. What it does not yet have is a *durable* adapter, which is
+the remaining half of [L7](LIMITATIONS.md#l7).
 
 ## The matrix
 
@@ -52,7 +51,21 @@ sessions    memory          true      true        Postgres via ADK DatabaseSessi
 knowledge   keyword         true      true        Vector search: pgvector, Vertex AI Search
 identity    trusted-header  true      true        OIDC / JWT
 eventStream memory          true      true        Redis Streams, Kafka, NATS JetStream
+messageStore memory         true      true        Postgres, DynamoDB, any keyed durable store
 ```
+
+### Why the last two rows are not the same capability
+
+They hold the same `FeedEvent`s, which is exactly what makes the distinction
+worth stating. **Retention is the difference, not the shape of the record.** The
+event stream answers *what happened next* over a window, addressed by offset,
+and forgets. The message store answers *what is this thread*, addressed by id,
+and does not.
+
+The store also holds strictly less: settled events only, never `message.delta`.
+A delta exists to show text before it is finished, and `message.complete`
+carries the authoritative full text — so storing deltas would be about five
+times the writes for nothing a reader would ever ask for.
 
 ### Why storage and delivery are one row, not two
 
@@ -86,16 +99,17 @@ features now depend on that provider rather than one docs page mentioning it.
 | **Knowledge retrieval** | Vector DB — pgvector, Vertex AI Search, Pinecone; ADK ships `VertexAiRagRetrievalTool` | keyword match over 3 fixture articles | `PROVIDER_KNOWLEDGE` | `packages/providers/src/knowledge` |
 | **Embeddings** | Gemini `text-embedding-*` | deterministic hashed vectors | `PROVIDER_EMBEDDINGS` | `packages/providers/src/knowledge` |
 | **Event stream** — storage, retention, replay and delivery | Redis Streams, Kafka, NATS JetStream | bounded in-process array plus a set of listeners | `PROVIDER_EVENTSTREAM` | `packages/providers/src/eventstream` |
+| **Message store** — the durable transcript | Postgres, DynamoDB, any keyed durable store | unbounded in-process Map, keyed by thread | `PROVIDER_MESSAGESTORE` | `packages/providers/src/messagestore` |
 | **Identity** | OIDC / JWT | client-supplied session id, trusted | `PROVIDER_IDENTITY` | `packages/providers/src/identity` |
 | **Business data (orders)** | An order service over HTTP | 3 fixture records + a fixed `sleep` | — | `packages/agents/src/tools.ts` |
 
-### Not emulated — simply absent
+### Absent, and named so they are not assumed
 
 Named so they are not mistaken for something that exists:
 
 | Capability | What a real system would use | Status |
 |---|---|---|
-| **Message/transcript store** | Postgres, DynamoDB | **absent.** The event log is the only place agent messages exist ([L7](LIMITATIONS.md#l7)). Not emulated — missing |
+
 | Telemetry / tracing | OpenTelemetry → GCP or Datadog; ADK ships `@google/adk/telemetry/gcp` | not wired |
 | Artifacts / blobs | GCS; ADK ships `@google/adk/artifacts/gcs` | unused |
 | Long-term memory | Vertex AI Memory Bank | unused |

@@ -63,6 +63,7 @@ const summary = (over: Partial<ThreadSummary> = {}): ThreadSummary => ({
   status: 'complete',
   createdAt: 1_700_000_000_000,
   lastSeq: 12,
+  transcript: [],
   ...over,
 });
 

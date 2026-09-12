@@ -11,13 +11,16 @@ import { memorySessions } from './sessions/memory.ts';
 import { keywordKnowledge } from './knowledge/keyword.ts';
 import { trustedHeaderIdentity } from './identity/trusted-header.ts';
 import { memoryEventStream } from './eventstream/memory.ts';
+import { memoryMessageStore } from './messagestore/memory.ts';
 import type { Providers } from './ports.ts';
 
 export * from './catalog.ts';
 export * from './config.ts';
 export * from './ports.ts';
 export * from './eventstream/port.ts';
+export * from './messagestore/port.ts';
 export { memoryEventStream } from './eventstream/memory.ts';
+export { memoryMessageStore } from './messagestore/memory.ts';
 export { keywordKnowledge, FIXTURE_ARTICLES } from './knowledge/keyword.ts';
 export { memorySessions } from './sessions/memory.ts';
 export { trustedHeaderIdentity } from './identity/trusted-header.ts';
@@ -33,6 +36,7 @@ export function resolveProviders(config: ProviderConfig = loadProviderConfig()):
   const knowledge = keywordKnowledge();
   const identity = trustedHeaderIdentity();
   const eventStream = memoryEventStream({ retention: config.eventRetention });
+  const messageStore = memoryMessageStore();
 
   if (config.sessions !== 'memory') {
     throw new Error(
@@ -42,6 +46,11 @@ export function resolveProviders(config: ProviderConfig = loadProviderConfig()):
   if (config.knowledge !== 'keyword') {
     throw new Error(
       `PROVIDER_KNOWLEDGE=${config.knowledge} is catalogued but not implemented yet. See docs/PROVIDERS.md.`,
+    );
+  }
+  if (config.messageStore !== 'memory') {
+    throw new Error(
+      `PROVIDER_MESSAGESTORE=${config.messageStore} is catalogued but not implemented yet. See docs/PROVIDERS.md.`,
     );
   }
   if (config.identity !== 'trusted-header') {
@@ -60,12 +69,14 @@ export function resolveProviders(config: ProviderConfig = loadProviderConfig()):
     knowledge,
     identity,
     eventStream,
+    messageStore,
     async close() {
       await Promise.all([
         sessions.close(),
         knowledge.close(),
         identity.close(),
         eventStream.close(),
+        messageStore.close(),
       ]);
     },
   };

@@ -56,6 +56,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     ...deps.runnerOptions,
     sessionService: providers.sessions.service(),
     knowledge: providers.knowledge,
+    messageStore: providers.messageStore,
   });
 
   const app = express();
@@ -85,6 +86,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
       knowledge: providers.knowledge.mode,
       identity: providers.identity.mode,
       eventStream: providers.eventStream.mode,
+      messageStore: providers.messageStore.mode,
     });
 
     res.json({
@@ -238,7 +240,7 @@ export function createApp(deps: AppDeps = {}): FeedApp {
       res.status(400).json({ error: 'sessionId is required' });
       return;
     }
-    res.json({ threads: threads.summaries(sessionId) });
+    res.json({ threads: await threads.restore(sessionId) });
   });
 
   app.post('/api/threads/:threadId/cancel', async (req: Request<{ threadId: string }>, res: Response) => {

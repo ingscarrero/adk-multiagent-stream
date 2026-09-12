@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import { Runner, StreamingMode, type BaseSessionService } from '@google/adk';
 import { createAgent, type AgentId } from '@feed/agents';
-import { memorySessions, type KnowledgeProvider } from '@feed/providers';
+import { memoryMessageStore, memorySessions, type KnowledgeProvider, type MessageStore } from '@feed/providers';
 import {
   assertTransition,
   canAcceptFollowUp,
@@ -81,6 +81,13 @@ export interface ThreadRunnerOptions {
    * the agents without this file knowing which adapter it is.
    */
   knowledge?: KnowledgeProvider;
+  /**
+   * Where the durable transcript lives.
+   *
+   * Distinct from the event stream, which is a retention window. This is what
+   * makes a thread readable after that window has rolled -- see L7.
+   */
+  messageStore?: MessageStore;
 }
 
 export class ThreadRunner {
@@ -88,10 +95,12 @@ export class ThreadRunner {
   private readonly aborts = new Map<string, AbortController>();
   private readonly sequences = new Map<string, number>();
   private readonly sessionService: BaseSessionService;
+  private readonly messageStore: MessageStore;
   private readonly inFlight = new Set<Promise<void>>();
 
   constructor(private readonly options: ThreadRunnerOptions = {}) {
     this.sessionService = options.sessionService ?? memorySessions().service();
+    this.messageStore = options.messageStore ?? memoryMessageStore();
   }
 
   get(threadId: string): ThreadRecord | undefined {
@@ -111,7 +120,27 @@ export class ThreadRunner {
    * thread stalls forever. Ordered by creation so the feed rebuilds in the same
    * order it was originally rendered.
    */
-  summaries(sessionId: string): ThreadSummary[] {
+  /**
+   * A session's threads *with* their transcripts, for the recovery snapshot.
+   *
+   * The endpoint used to return identity alone, because there was nothing else
+   * to return -- events lived only in the replay window. With a store behind
+   * it, recovery hands back the conversation itself, and the client applies
+   * those events through the same reducer path that live ones take.
+   */
+  async restore(sessionId: string): Promise<ThreadSummary[]> {
+    const summaries = this.summaries(sessionId);
+    const stored = await this.messageStore.transcripts(summaries.map((s) => s.id));
+    return summaries.map((summary) => ({
+      ...summary,
+      transcript: stored.get(summary.id) ?? [],
+    }));
+  }
+
+  /**
+   * Identity only, without transcripts. The cheap half of {@link restore}.
+   */
+  summaries(sessionId: string): Omit<ThreadSummary, 'transcript'>[] {
     return this.list(sessionId)
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((thread) => ({
@@ -286,6 +315,14 @@ export class ThreadRunner {
     // Validating on the way out means a protocol mistake fails in the server's
     // own tests rather than as a silently-dropped frame in the browser.
     const event = parseFeedEvent({ ...draft, threadId, seq, ts: Date.now() });
+
+    // Store before publishing, and await both.
+    //
+    // The order is the durability guarantee: an event a client has seen must
+    // already be recoverable, or a reconnect a millisecond later would find
+    // less history than the connection that dropped. The store ignores deltas
+    // itself, so this is roughly five writes per turn rather than every one.
+    await this.messageStore.append(threadId, event);
     await hub.publish(event);
     return event;
   }

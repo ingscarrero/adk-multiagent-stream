@@ -123,6 +123,18 @@ export interface ThreadState {
    * actually missed.
    */
   awaitingResume: boolean;
+  /**
+   * Set alongside {@link awaitingResume} when the thread was rebuilt from a
+   * durable transcript rather than from identity alone.
+   *
+   * It exists to keep two things apart that `timeline.length` conflates: a
+   * thread that has content because the *store* returned it, and one that has
+   * content because it was here all along. Only the first makes a forward jump
+   * expected -- the transcript stores settled events, so the seq numbers that
+   * belonged to deltas are legitimately absent. For the second, a jump still
+   * means loss.
+   */
+  restoredFromStore: boolean;
 }
 
 export interface FeedState {
@@ -187,6 +199,7 @@ function createThread(event: Extract<FeedEvent, { type: 'thread.created' }>): Th
     buffered: [],
     historyTruncated: false,
     awaitingResume: false,
+    restoredFromStore: false,
   };
 }
 
@@ -383,35 +396,62 @@ function applyResync(state: FeedState, summaries: ThreadSummary[]): FeedState {
   for (const summary of summaries) {
     const existing = threads[summary.id];
 
-    if (!existing) {
-      threads[summary.id] = {
-        id: summary.id,
-        prompt: summary.prompt,
-        agent: summary.agent,
-        status: summary.status,
-        timeline: [],
-        messages: {},
-        tools: {},
-        createdAt: summary.createdAt,
-        updatedAt: summary.createdAt,
-        // Deliberately NOT the snapshot's lastSeq. See the note above.
-        lastSeq: 0,
-        buffered: [],
-        // The server says this thread has produced events and we hold none, so
-        // assume its history is missing. The replay may immediately disprove
-        // that by delivering seq 1, and then this is cleared.
-        historyTruncated: summary.lastSeq > 0,
-        awaitingResume: true,
-      };
-      order.push(summary.id);
-      continue;
-    }
-
-    threads[summary.id] = {
-      ...existing,
-      status: summary.status,
+    const shell: ThreadState = existing ?? {
+      id: summary.id,
+      prompt: summary.prompt,
+      agent: summary.agent,
+      status: 'queued',
+      timeline: [],
+      messages: {},
+      tools: {},
+      createdAt: summary.createdAt,
+      updatedAt: summary.createdAt,
+      // Deliberately NOT the snapshot's lastSeq. See the note above.
+      lastSeq: 0,
+      buffered: [],
+      historyTruncated: summary.lastSeq > 0,
       awaitingResume: true,
+      restoredFromStore: false,
     };
+
+    // Hydrate from the durable transcript, bypassing the ordering gates.
+    //
+    // A transcript has gaps *by design*: it stores settled events only, so the
+    // seq numbers that belonged to deltas are simply absent. Feeding it through
+    // gate 3 would read those holes as loss and buffer the whole thing against
+    // predecessors that are never coming. The gates police a *transport*; a
+    // store is not one.
+    //
+    // Replayed from `queued`, never from the summary's current status. The
+    // transcript is the thread's whole history, so its status transitions are
+    // only legal when walked from the start. Started at the final status
+    // instead, every historical transition is rejected as illegal -- but
+    // `thread.input_required` still applies, and a thread that paused for an
+    // approval before ending in `error` would come back offering that stale
+    // decision again. The summary's status is applied last, below.
+    const hydrated = summary.transcript.reduce(applyToThread, { ...shell, status: 'queued' });
+
+    const restoredFromStore = summary.transcript.length > 0;
+    // A request can only be pending while the thread is paused on it. Any
+    // other final status means it was answered, or the run ended without it.
+    const { inputRequest, ...rest } = hydrated;
+    threads[summary.id] = {
+      ...rest,
+      ...(summary.status === 'awaiting_input' && inputRequest ? { inputRequest } : {}),
+      status: summary.status,
+      // The store answered, so nothing is missing. History is only genuinely
+      // gone when the thread has no content from either source -- which with
+      // the memory adapter is exactly what a restart looks like.
+      historyTruncated: hydrated.timeline.length === 0 && summary.lastSeq > 0,
+      // The high-water mark never moves backwards. A live thread may already be
+      // past the transcript's end -- deltas are not stored, so the store's last
+      // seq is the last *settled* event, not the last one the client applied.
+      // Lowering it would let the replay that follows re-append those deltas.
+      lastSeq: Math.max(shell.lastSeq, summary.transcript.at(-1)?.seq ?? 0),
+      awaitingResume: true,
+      restoredFromStore,
+    };
+    if (!existing) order.push(summary.id);
   }
 
   return {
@@ -470,7 +510,18 @@ function reduceEvent(state: FeedState, event: FeedEvent): FeedState {
       lastSeq: event.seq - 1,
       awaitingResume: false,
       // seq 1 is the start of the thread by definition, so nothing precedes it.
-      historyTruncated: event.seq === 1 ? false : existing.historyTruncated || jumped,
+      //
+      // A jump only means loss when there is nothing to compare it against.
+      // After hydrating from a transcript the thread already holds its content
+      // and the gap is the delta seqs the store deliberately never kept, so
+      // reading it as truncation would slander a complete transcript.
+      historyTruncated:
+        event.seq === 1
+          ? false
+          : existing.restoredFromStore
+            ? existing.historyTruncated
+            : existing.historyTruncated || jumped,
+      restoredFromStore: false,
       // Anything held at or below this event is now redundant.
       buffered: existing.buffered.filter((held) => held.seq > event.seq),
     };

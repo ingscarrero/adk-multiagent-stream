@@ -33,7 +33,7 @@ async function overflowBuffer(feed: FeedPage) {
 }
 
 test.describe('replay-buffer overrun', () => {
-  test('a reload keeps what the buffer still holds, and admits the rest is gone', async ({
+  test('a reload restores both threads whole, including the one the buffer forgot', async ({
     feed,
     page,
   }) => {
@@ -43,16 +43,22 @@ test.describe('replay-buffer overrun', () => {
     await expect(feed.connectionState).toHaveAttribute('data-state', 'open');
     await expect(feed.threads).toHaveCount(2);
 
-    // The recent thread is intact -- its events are still in the replay. This
-    // is the case that regressed: the snapshot watermark discarded them all and
-    // the thread rendered empty.
+    // The recent thread is intact. This is the case that regressed twice: the
+    // snapshot watermark once discarded the replay that would have restored it.
     const recent = feed.thread(WARRANTY);
     await expect(feed.messages(recent)).toContainText('warranty');
-    await expect(feed.truncation(recent)).toHaveCount(0);
 
-    // The older thread lost its beginning and says so, rather than presenting a
-    // partial transcript as though it were whole.
-    await expect(feed.truncation(feed.thread(ORDER))).toBeVisible();
+    // And so is the older one, whose events rolled out of the replay window
+    // entirely. That is the whole of L7: the window is the *stream's* property,
+    // and the transcript does not share it.
+    //
+    // This assertion is the inverse of what it used to be. The old version
+    // asserted the thread admitted its history was gone -- honest at the time,
+    // and exactly the symptom that made L16 worth closing.
+    const older = feed.thread(ORDER);
+    await expect(feed.messages(older)).toContainText('A-1001');
+    await expect(feed.truncation(older)).toHaveCount(0);
+    await expect(feed.truncation(recent)).toHaveCount(0);
   });
 
   test('recovery settles after one resync instead of looping', async ({ page }) => {
@@ -107,9 +113,24 @@ test.describe('replay-buffer overrun', () => {
     await page.reload();
 
     await expect(feed.stat('resyncs')).toHaveText('resyncs 1');
-    // The replay actually landed. (Redundant drops are *not* expected here:
-    // rebuilt threads resume at whatever the replay delivers first, so nothing
-    // arrives that has already been applied.)
-    await expect(feed.stat('applied')).not.toHaveText('applied 0');
+
+    // `lossy 0` is the assertion that matters, and it is the one that changed
+    // meaning. It used to mean "nothing was discarded that we could have kept";
+    // now nothing is unrecoverable at all, because the store answered first.
+    await expect(feed.stat('lossy')).toHaveText('lossy 0');
+
+    // Redundant drops are now *expected*, which is the inverse of the note that
+    // used to be here. Threads are hydrated from the transcript before the
+    // stream replays, so the replay is largely re-delivering what the store
+    // already supplied -- a healthy overlap rather than a loss.
+    await expect(feed.threads).toHaveCount(2);
+    await expect(feed.stat('redundant')).toHaveText(/^redundant [1-9]\d*$/);
+
+    // And nothing in that replay was new. Hydration does not count as applied
+    // (it bypasses the gates), and both threads had finished before the
+    // reload, so every replayed frame is at or below the hydrated watermark.
+    // Were hydration to stop working, the replay would be applied normally and
+    // this counter would climb -- with the store's contribution invisible.
+    await expect(feed.stat('applied')).toHaveText('applied 0');
   });
 });

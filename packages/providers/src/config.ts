@@ -13,15 +13,17 @@ export type SessionsMode = 'memory' | 'postgres';
 export type KnowledgeMode = 'keyword' | 'vector';
 export type IdentityMode = 'trusted-header' | 'jwt';
 export type EventStreamMode = 'memory' | 'redis';
+export type MessageStoreMode = 'memory' | 'postgres';
 
 export interface ProviderConfig {
   sessions: SessionsMode;
   knowledge: KnowledgeMode;
   identity: IdentityMode;
   eventStream: EventStreamMode;
+  messageStore: MessageStoreMode;
   /** Events retained per session. The window a reconnecting client can resume within. */
   eventRetention: number;
-  /** Required by `sessions=postgres` and `knowledge=vector`. */
+  /** Required by `sessions=postgres`, `knowledge=vector` and `messageStore=postgres`. */
   databaseUrl?: string;
   /** Required by `identity=jwt`. */
   jwtSecret?: string;
@@ -58,6 +60,10 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
     env, 'PROVIDER_IDENTITY',
     [CAPABILITIES.identity.emulated, ...CAPABILITIES.identity.real], 'trusted-header',
   );
+  const messageStore = pick<MessageStoreMode>(
+    env, 'PROVIDER_MESSAGESTORE',
+    [CAPABILITIES.messageStore.emulated, ...CAPABILITIES.messageStore.real], 'memory',
+  );
 
   const eventStream = pick<EventStreamMode>(
     env, 'PROVIDER_EVENTSTREAM',
@@ -69,9 +75,12 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
   const jwtSecret = env['JWT_SECRET'];
 
   // Fail at startup, naming the variable, rather than on first use.
-  if ((sessions === 'postgres' || knowledge === 'vector') && !databaseUrl) {
+  if (
+    (sessions === 'postgres' || knowledge === 'vector' || messageStore === 'postgres') &&
+    !databaseUrl
+  ) {
     throw new Error(
-      `PROVIDER_SESSIONS=postgres and PROVIDER_KNOWLEDGE=vector require DATABASE_URL. See docs/PROVIDERS.md.`,
+      `PROVIDER_SESSIONS=postgres, PROVIDER_KNOWLEDGE=vector and PROVIDER_MESSAGESTORE=postgres require DATABASE_URL. See docs/PROVIDERS.md.`,
     );
   }
   if (identity === 'jwt' && !jwtSecret) {
@@ -90,6 +99,7 @@ export function loadProviderConfig(env: NodeJS.ProcessEnv = process.env): Provid
     // just as much. `SSE_REPLAY_BUFFER` is still honoured because it is the
     // name the docs and the dev:recovery recipe already use.
     eventRetention: Number(env['EVENT_RETENTION'] ?? env['SSE_REPLAY_BUFFER'] ?? 500),
+    messageStore,
     ...(databaseUrl ? { databaseUrl } : {}),
     ...(jwtSecret ? { jwtSecret } : {}),
     ...(redisUrl ? { redisUrl } : {}),
