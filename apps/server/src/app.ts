@@ -243,10 +243,18 @@ export function createApp(deps: AppDeps = {}): FeedApp {
     res.json({ threads: await threads.restore(sessionId) });
   });
 
-  app.post('/api/threads/:threadId/cancel', (req: Request<{ threadId: string }>, res: Response) => {
+  app.post('/api/threads/:threadId/cancel', async (req: Request<{ threadId: string }>, res: Response) => {
+    const sessionId = await sessionIdOf(req);
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId is required' });
+      return;
+    }
+
     const { threadId } = req.params;
     const thread = threads.get(threadId);
-    if (!thread) {
+    // Same guard as follow-up and respond: a thread id alone is not a licence
+    // to stop someone else's run, and a mismatch reads as "not found".
+    if (!thread || thread.sessionId !== sessionId) {
       res.status(404).json({ error: 'Unknown thread' });
       return;
     }

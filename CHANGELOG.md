@@ -23,6 +23,21 @@ them. Limitation ids (`L1`…`L17`) refer to [docs/LIMITATIONS.md](docs/LIMITATI
 ### Changed
 - README license line corrected from Apache-2.0 to MIT (the `@google/adk`
   dependency is Apache-2.0; this repository is not a fork of it).
+- `postinstall` no longer runs `playwright install --with-deps`, which on
+  Linux invoked `sudo apt-get` on every install; system dependencies are now
+  installed only in the CI e2e job.
+
+### Security
+- `POST /api/threads/:id/cancel` now resolves the caller's session and answers
+  `404` when the thread belongs to another session, matching the guard on
+  follow-up and respond. Before this, any caller who knew a thread id could
+  cancel another session's run.
+- CI workflow token scoped to `contents: read`; every third-party action pinned
+  to a commit SHA.
+- `pnpm-workspace.yaml` overrides lift three transitive dependencies of
+  `@google/adk` past their advisories: `adm-zip` (GHSA-xcpc-8h2w-3j85,
+  GHSA-vwc7-r8mq-g2x9), `uuid` (GHSA-w5hq-g745-h8pq) and
+  `@opentelemetry/core` (GHSA-8988-4f7v-96qf). `pnpm audit --prod` is clean.
 
 ## 0.1.0 — 2026-08-31
 
