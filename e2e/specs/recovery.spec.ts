@@ -124,5 +124,13 @@ test.describe('replay-buffer overrun', () => {
     // stream replays, so the replay is largely re-delivering what the store
     // already supplied -- a healthy overlap rather than a loss.
     await expect(feed.threads).toHaveCount(2);
+    await expect(feed.stat('redundant')).toHaveText(/^redundant [1-9]\d*$/);
+
+    // And nothing in that replay was new. Hydration does not count as applied
+    // (it bypasses the gates), and both threads had finished before the
+    // reload, so every replayed frame is at or below the hydrated watermark.
+    // Were hydration to stop working, the replay would be applied normally and
+    // this counter would climb -- with the store's contribution invisible.
+    await expect(feed.stat('applied')).toHaveText('applied 0');
   });
 });
