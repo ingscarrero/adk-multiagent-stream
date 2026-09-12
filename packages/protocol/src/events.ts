@@ -249,12 +249,13 @@ export const inputResponseRequestSchema = z.object({
 export type InputResponseRequest = z.infer<typeof inputResponseRequestSchema>;
 
 /**
- * A thread as the server currently knows it, without its transcript.
+ * A thread as the server currently knows it: its identity, its position in
+ * the sequence, and its transcript.
  *
  * Returned by `GET /api/threads` and used to rebuild client state after a
- * replay-buffer overrun. `lastSeq` is the crucial field: it tells a recovering
- * client where the thread's sequence has reached, so live events continue
- * contiguously instead of looking like an unbridgeable gap.
+ * replay-buffer overrun. `lastSeq` tells a recovering client where the
+ * thread's sequence has reached, so live events continue contiguously instead
+ * of looking like an unbridgeable gap.
  *
  * `transcript` is the thread's settled events, from the durable message store:
  * everything except `message.delta`, which is a transport artefact worth

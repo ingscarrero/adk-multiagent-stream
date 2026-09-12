@@ -340,10 +340,11 @@ Both behaviours are covered by the Playwright suite, which runs on Chromium
 GET /api/threads?sessionId=S  →  { threads: ThreadSummary[] }
 ```
 
-`ThreadSummary` is `{ id, prompt, agent, status, createdAt, lastSeq }` — a
-thread's identity and position, never its content. It exists for exactly one
-caller, the recovery path above, and is cheap and idempotent so a client may
-call it whenever it suspects it has drifted.
+`ThreadSummary` is `{ id, prompt, agent, status, createdAt, lastSeq, transcript }`
+— a thread's identity and position, plus its settled events from the message
+store (§5b). It exists for exactly one caller, the recovery path above, and is
+cheap and idempotent so a client may call it whenever it suspects it has
+drifted.
 
 `lastSeq` is a hint, not a watermark. A rebuilt thread uses it only to decide
 whether to warn that history may be missing; it does not seek forward to it,
