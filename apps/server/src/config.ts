@@ -23,6 +23,14 @@ export interface ServerConfig {
   /** How often to sweep. */
   sweepIntervalMs: number;
   /**
+   * Settled events `GET /api/threads` carries per thread, at most.
+   *
+   * The message store is unbounded on purpose; a snapshot response is not.
+   * A thread past this cap returns its newest events with
+   * `transcriptTruncated` set. See L7.
+   */
+  snapshotTranscriptLimit: number;
+  /**
    * Which adapter backs each capability the app does not implement itself.
    *
    * Emulated by default so a clone runs with no services. See
@@ -47,6 +55,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     maxBufferedBytes: Number(env['SSE_MAX_BUFFERED_BYTES'] ?? 1_048_576),
     idleTtlMs: Number(env['SESSION_IDLE_TTL_MS'] ?? 900_000),
     sweepIntervalMs: Number(env['SESSION_SWEEP_INTERVAL_MS'] ?? 60_000),
+    snapshotTranscriptLimit: Number(env['SNAPSHOT_TRANSCRIPT_LIMIT'] ?? 1000),
     providers: loadProviderConfig(env),
   };
 }
